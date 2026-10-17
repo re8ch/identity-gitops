@@ -1,0 +1,6 @@
+domain: identity-access
+controllerNamespace: flux-identity-system
+forbidden:
+  - {apiVersion: apps/v1, kind: Deployment, namespace: auth, name: re8ch-auth-gateway}
+  - {apiVersion: policy/v1, kind: PodDisruptionBudget, namespace: auth, name: re8ch-auth-gateway}
+  - {apiVersion: apps/v1, kind: Deployment, namespace: auth, name: re8ch-user-center}
