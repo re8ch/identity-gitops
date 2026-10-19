@@ -1,3 +1,3 @@
-sourceServiceBackendRevision: 66653c86892eb04c6e9ed8ceaeaab987915155e0
+sourceServiceBackendRevision: a605fe3ce5905506fc938eff515b3292a9675640
 domain: identity-access
-cutoverState: staged
+cutoverState: autonomous
