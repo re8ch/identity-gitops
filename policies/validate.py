@@ -11,6 +11,8 @@ errors = []
 for doc in documents:
     meta = doc.get("metadata", {})
     identity = (doc.get("apiVersion"), doc.get("kind"), meta.get("namespace", ""), meta.get("name"))
+    if doc.get("kind") == "Namespace":
+        errors.append(f"namespace ownership belongs to the main Flux: {meta.get('name')}")
     if identity in seen:
         errors.append(f"duplicate object: {identity}")
     seen.add(identity)
