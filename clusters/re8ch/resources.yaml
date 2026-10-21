@@ -12151,11 +12151,9 @@ kind: StatefulSet
 metadata:
   name: stalwart-flk
   namespace: mail-system
-  annotations:
-    delivery.re8ch.com/cutover-phase: stopped-for-final-copy
 spec:
   podManagementPolicy: OrderedReady
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: stalwart
@@ -12257,7 +12255,8 @@ spec:
       dnsPolicy: None
       initContainers:
       - args:
-        - 'until [ -f /var/lib/stalwart/.r640-migration-complete ]; do sleep 5; done
+        - 'until [ -f /var/lib/stalwart/.r640-migration-v2-complete ]; do sleep 5;
+          done
 
           test -f /var/lib/stalwart/CURRENT
 
@@ -12332,11 +12331,9 @@ metadata:
     app.kubernetes.io/name: stalwart-idp
   name: stalwart-idp-flk
   namespace: mail-system
-  annotations:
-    delivery.re8ch.com/cutover-phase: stopped-for-final-copy
 spec:
   podManagementPolicy: OrderedReady
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: stalwart-idp
@@ -12405,8 +12402,8 @@ spec:
           readOnly: true
       initContainers:
       - args:
-        - 'until [ -f /var/lib/stalwart-idp/.r640-migration-complete ]; do sleep 5;
-          done
+        - 'until [ -f /var/lib/stalwart-idp/.r640-migration-v2-complete ]; do sleep
+          5; done
 
           test -f /var/lib/stalwart-idp/CURRENT
 
@@ -12696,7 +12693,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: stalwart-flk-migration-v1
+  name: stalwart-flk-migration-v2
   namespace: mail-system
 spec:
   backoffLimit: 6
@@ -12712,7 +12709,7 @@ spec:
 
           sync
 
-          touch /destination/.r640-migration-complete
+          touch /destination/.r640-migration-v2-complete
 
           '
         command:
@@ -12903,7 +12900,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: stalwart-idp-flk-migration-v1
+  name: stalwart-idp-flk-migration-v2
   namespace: mail-system
 spec:
   backoffLimit: 6
@@ -12919,7 +12916,7 @@ spec:
 
           sync
 
-          touch /destination/.r640-migration-complete
+          touch /destination/.r640-migration-v2-complete
 
           '
         command:
@@ -13469,152 +13466,3 @@ spec:
               number: 80
         path: /
         pathType: Prefix
-
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: stalwart-flk-migration-v2
-  namespace: mail-system
-spec:
-  backoffLimit: 6
-  template:
-    spec:
-      containers:
-      - args:
-        - 'find /destination -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-
-          cp -a /source/. /destination/
-
-          test -f /destination/CURRENT
-
-          sync
-
-          touch /destination/.r640-migration-v2-complete
-
-          '
-        command:
-        - /bin/sh
-        - -ceu
-        image: alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
-        name: copy
-        resources:
-          limits:
-            cpu: 250m
-            memory: 128Mi
-          requests:
-            cpu: 25m
-            memory: 32Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-        volumeMounts:
-        - mountPath: /source
-          name: source
-          readOnly: true
-        - mountPath: /destination
-          name: destination
-      nodeSelector:
-        kubernetes.io/hostname: overseas-flk
-      restartPolicy: OnFailure
-      securityContext:
-        fsGroup: 2000
-        runAsGroup: 2000
-        runAsNonRoot: true
-        runAsUser: 2000
-        seccompProfile:
-          type: RuntimeDefault
-      tolerations:
-      - effect: NoSchedule
-        key: dedicated
-        operator: Equal
-        value: overseas-edge
-      - effect: NoSchedule
-        key: scheduling.re8ch.com/capacity-window
-        operator: Equal
-        value: closed
-      volumes:
-      - name: source
-        persistentVolumeClaim:
-          claimName: data-stalwart-0
-          readOnly: true
-      - name: destination
-        persistentVolumeClaim:
-          claimName: stalwart-flk-data
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: stalwart-idp-flk-migration-v2
-  namespace: mail-system
-spec:
-  backoffLimit: 6
-  template:
-    spec:
-      containers:
-      - args:
-        - 'find /destination -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-
-          cp -a /source/. /destination/
-
-          test -f /destination/CURRENT
-
-          sync
-
-          touch /destination/.r640-migration-v2-complete
-
-          '
-        command:
-        - /bin/sh
-        - -ceu
-        image: alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659
-        name: copy
-        resources:
-          limits:
-            cpu: 250m
-            memory: 128Mi
-          requests:
-            cpu: 25m
-            memory: 32Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-        volumeMounts:
-        - mountPath: /source
-          name: source
-          readOnly: true
-        - mountPath: /destination
-          name: destination
-      nodeSelector:
-        kubernetes.io/hostname: overseas-flk
-      restartPolicy: OnFailure
-      securityContext:
-        fsGroup: 2000
-        runAsGroup: 2000
-        runAsNonRoot: true
-        runAsUser: 2000
-        seccompProfile:
-          type: RuntimeDefault
-      tolerations:
-      - effect: NoSchedule
-        key: dedicated
-        operator: Equal
-        value: overseas-edge
-      - effect: NoSchedule
-        key: scheduling.re8ch.com/capacity-window
-        operator: Equal
-        value: closed
-      volumes:
-      - name: source
-        persistentVolumeClaim:
-          claimName: data-stalwart-idp-0
-          readOnly: true
-      - name: destination
-        persistentVolumeClaim:
-          claimName: stalwart-idp-flk-data
