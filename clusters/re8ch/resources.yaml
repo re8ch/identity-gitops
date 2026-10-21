@@ -11354,12 +11354,6 @@ metadata:
   name: stalwart-mailbox-provisioner
   namespace: mail-system
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: stalwart-r640-retirement
-  namespace: mail-system
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -11412,31 +11406,6 @@ rules:
   - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: stalwart-r640-retirement
-  namespace: mail-system
-rules:
-- apiGroups:
-  - apps
-  resourceNames:
-  - stalwart
-  - stalwart-idp
-  resources:
-  - statefulsets
-  verbs:
-  - get
-  - delete
-- apiGroups:
-  - ''
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: stalwart-cloudflare-token-target
@@ -11462,20 +11431,6 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: stalwart-mailbox-provisioner
-  namespace: mail-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: stalwart-r640-retirement
-  namespace: mail-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: stalwart-r640-retirement
-subjects:
-- kind: ServiceAccount
-  name: stalwart-r640-retirement
   namespace: mail-system
 ---
 apiVersion: v1
@@ -13018,85 +12973,6 @@ spec:
       - name: destination
         persistentVolumeClaim:
           claimName: stalwart-idp-flk-data
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  annotations:
-    governance.re8ch.com/change: retire-r640-stalwart-before-cold-copy
-  name: stalwart-r640-retirement-v2
-  namespace: mail-system
-spec:
-  backoffLimit: 3
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: stalwart-r640-retirement
-    spec:
-      containers:
-      - args:
-        - --namespace
-        - mail-system
-        - wait
-        - --for=delete
-        - pod/stalwart-0
-        - pod/stalwart-idp-0
-        - --timeout=300s
-        command:
-        - kubectl
-        image: registry.k8s.io/kubectl:v1.34.1@sha256:59bafa07ff3a6d4b417e7633ddb9d79a9606ca98bf64bac080b3e65748669250
-        name: wait-for-pods
-        resources:
-          limits:
-            cpu: 100m
-            memory: 64Mi
-          requests:
-            cpu: 10m
-            memory: 32Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-      initContainers:
-      - args:
-        - --namespace
-        - mail-system
-        - delete
-        - statefulset
-        - stalwart
-        - stalwart-idp
-        - --ignore-not-found=true
-        - --wait=false
-        command:
-        - kubectl
-        image: registry.k8s.io/kubectl:v1.34.1@sha256:59bafa07ff3a6d4b417e7633ddb9d79a9606ca98bf64bac080b3e65748669250
-        name: delete-statefulsets
-        resources:
-          limits:
-            cpu: 100m
-            memory: 64Mi
-          requests:
-            cpu: 10m
-            memory: 32Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          readOnlyRootFilesystem: true
-      nodeSelector:
-        kubernetes.io/hostname: r640
-      restartPolicy: OnFailure
-      securityContext:
-        runAsGroup: 65532
-        runAsNonRoot: true
-        runAsUser: 65532
-        seccompProfile:
-          type: RuntimeDefault
-      serviceAccountName: stalwart-r640-retirement
-  ttlSecondsAfterFinished: 604800
 ---
 apiVersion: batch/v1
 kind: Job
