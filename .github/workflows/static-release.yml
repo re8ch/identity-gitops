@@ -40,6 +40,7 @@ jobs:
     needs: validate
     runs-on: [self-hosted, Linux, X64, r640, untrusted-build]
     timeout-minutes: 20
+    env: {DOCKER_CONFIG: '${{ runner.temp }}/docker-config'}
     environment: ${{ needs.validate.outputs.environment }}
     permissions: {contents: read, id-token: write, packages: write}
     outputs:
@@ -56,6 +57,7 @@ jobs:
         with: {version: '2.9.5'}
       - uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
         with: {install-dir: '${{ runner.temp }}/cosign'}
+      - run: install -d "$DOCKER_CONFIG"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -168,6 +170,7 @@ jobs:
     needs: [validate, compile-sign]
     runs-on: [self-hosted, Linux, X64, r640, untrusted-build]
     timeout-minutes: 15
+    env: {DOCKER_CONFIG: '${{ runner.temp }}/docker-config'}
     environment: ${{ needs.validate.outputs.environment }}
     permissions: {contents: read, id-token: write, packages: read}
     steps:
@@ -178,6 +181,7 @@ jobs:
         with: {version: '2.9.5'}
       - uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
         with: {install-dir: '${{ runner.temp }}/cosign'}
+      - run: install -d "$DOCKER_CONFIG"
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
