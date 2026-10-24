@@ -12033,6 +12033,32 @@ spec:
       storage: 1Gi
   storageClassName: rbd-r640
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-flk-local-data
+  namespace: mail-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-idp-flk-local-data
+  namespace: mail-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12178,11 +12204,13 @@ spec:
         image: ghcr.io/stalwartlabs/stalwart:v0.16.18@sha256:9ed1d343243b7aa72969e372a7240b7ddea07730781d4b68a0dc3d8d51c418bb
         imagePullPolicy: IfNotPresent
         livenessProbe:
+          failureThreshold: 6
           httpGet:
             path: /healthz/live
             port: management
           initialDelaySeconds: 20
           periodSeconds: 20
+          timeoutSeconds: 10
         name: stalwart
         ports:
         - containerPort: 25
@@ -12213,6 +12241,7 @@ spec:
             port: management
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 10
         resources:
           limits:
             cpu: '2'
@@ -12228,6 +12257,13 @@ spec:
             drop:
             - ALL
           readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/live
+            port: management
+          periodSeconds: 10
+          timeoutSeconds: 10
         volumeMounts:
         - mountPath: /etc/stalwart
           name: config
@@ -12302,7 +12338,7 @@ spec:
         name: tmp
       - name: data
         persistentVolumeClaim:
-          claimName: stalwart-flk-data
+          claimName: stalwart-flk-local-data
       - name: cloudflare-token
         secret:
           items:
@@ -12359,11 +12395,13 @@ spec:
         image: ghcr.io/stalwartlabs/stalwart:v0.16.18@sha256:9ed1d343243b7aa72969e372a7240b7ddea07730781d4b68a0dc3d8d51c418bb
         imagePullPolicy: IfNotPresent
         livenessProbe:
+          failureThreshold: 6
           httpGet:
             path: /healthz/live
             port: http
           initialDelaySeconds: 20
           periodSeconds: 20
+          timeoutSeconds: 10
         name: stalwart-idp
         ports:
         - containerPort: 8080
@@ -12374,6 +12412,7 @@ spec:
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 10
         resources:
           limits:
             cpu: 500m
@@ -12389,6 +12428,13 @@ spec:
             drop:
             - ALL
           readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/live
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 10
         volumeMounts:
         - mountPath: /etc/stalwart
           name: config
@@ -12449,7 +12495,7 @@ spec:
         name: tmp
       - name: data
         persistentVolumeClaim:
-          claimName: stalwart-idp-flk-data
+          claimName: stalwart-idp-flk-local-data
       - name: oidc-keys
         secret:
           secretName: stalwart-idp-oidc-keys
