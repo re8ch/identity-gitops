@@ -12033,6 +12033,32 @@ spec:
       storage: 1Gi
   storageClassName: rbd-r640
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-flk-local-data
+  namespace: mail-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stalwart-idp-flk-local-data
+  namespace: mail-system
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-path
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12312,7 +12338,7 @@ spec:
         name: tmp
       - name: data
         persistentVolumeClaim:
-          claimName: stalwart-flk-data
+          claimName: stalwart-flk-local-data
       - name: cloudflare-token
         secret:
           items:
@@ -12469,7 +12495,7 @@ spec:
         name: tmp
       - name: data
         persistentVolumeClaim:
-          claimName: stalwart-idp-flk-data
+          claimName: stalwart-idp-flk-local-data
       - name: oidc-keys
         secret:
           secretName: stalwart-idp-oidc-keys
