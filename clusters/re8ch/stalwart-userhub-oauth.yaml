@@ -110,7 +110,7 @@
       "app.kubernetes.io/name": "stalwart-unified-identity-bootstrap",
       "governance.re8ch.com/change-plane": "deploying"
     },
-    "name": "stalwart-userhub-oauth-v1",
+    "name": "stalwart-userhub-oauth-v2",
     "namespace": "mail-system"
   },
   "spec": {
@@ -218,6 +218,6 @@
       }
     },
     "ttlSecondsAfterFinished": 604800,
-    "activeDeadlineSeconds": 120
+    "activeDeadlineSeconds": 240
   }
 }
