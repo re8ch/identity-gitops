@@ -13507,6 +13507,19 @@ spec:
     namespace: kube-system
     sectionName: mail-https
   rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /api/auth/oauth/metadata
+    filters:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
+        set:
+        - name: Cache-Control
+          value: no-store
+    backendRefs:
+    - name: stalwart-webmail
+      port: 80
   - backendRefs:
     - name: stalwart-webmail
       port: 80
