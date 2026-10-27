@@ -1,0 +1,49 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-opensandbox-system
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: opensandbox-system
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-opensandbox-system
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-opensandbox-system
+    resources:
+    - apps/Deployment
+    - core/ConfigMap
+    - core/Service
+    - networking.k8s.io/NetworkPolicy
+    objectNames:
+    - opensandbox-orchestra-proxy
+    allowClusterScoped: false
+    forceConflictObjects:
+    - apps/Deployment/opensandbox-system/opensandbox-orchestra-proxy
+    - core/ConfigMap/opensandbox-system/opensandbox-orchestra-proxy
+    - core/Service/opensandbox-system/opensandbox-orchestra-proxy
+    - networking.k8s.io/NetworkPolicy/opensandbox-system/opensandbox-orchestra-proxy
+  inventory:
+    digest: sha256:ec93ab61100a1e2e2663c4186ab4544f65f733fc317217d82e7d02e6eafd3af9
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

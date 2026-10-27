@@ -1,0 +1,53 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-re8ch-anysite
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: re8ch-anysite
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-re8ch-anysite
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-re8ch-anysite
+    resources:
+    - core/PersistentVolumeClaim
+    - core/Service
+    - networking.k8s.io/Ingress
+    - networking.k8s.io/NetworkPolicy
+    objectNames:
+    - allow-public-gateway
+    - anysite-postgrest
+    - scale-api
+    - scale-cache
+    allowClusterScoped: false
+    forceConflictObjects:
+    - core/PersistentVolumeClaim/re8ch-anysite/scale-cache
+    - core/Service/re8ch-anysite/anysite-postgrest
+    - core/Service/re8ch-anysite/scale-api
+    - networking.k8s.io/Ingress/re8ch-anysite/scale-api
+    - networking.k8s.io/NetworkPolicy/re8ch-anysite/allow-public-gateway
+  inventory:
+    digest: sha256:815214dcee834a142cdcc6fd42d40f7b097c960b5718825aead25866a85a68a8
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

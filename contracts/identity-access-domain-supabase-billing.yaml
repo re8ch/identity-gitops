@@ -1,0 +1,94 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-supabase-billing
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: supabase-billing
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-supabase-billing
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-supabase-billing
+    resources:
+    - apps/Deployment
+    - cilium.io/CiliumNetworkPolicy
+    - core/ConfigMap
+    - core/PersistentVolumeClaim
+    - core/ResourceQuota
+    - core/Service
+    - gateway.networking.k8s.io/HTTPRoute
+    - networking.k8s.io/Ingress
+    - networking.k8s.io/NetworkPolicy
+    objectNames:
+    - supabase-billing
+    - supabase-billing-api
+    - supabase-billing-auth
+    - supabase-billing-default-deny
+    - supabase-billing-dns
+    - supabase-billing-env
+    - supabase-billing-imgproxy
+    - supabase-billing-kong
+    - supabase-billing-kong-config
+    - supabase-billing-meta
+    - supabase-billing-pigsty
+    - supabase-billing-public-edge
+    - supabase-billing-quota
+    - supabase-billing-realtime
+    - supabase-billing-rest
+    - supabase-billing-rest-ro
+    - supabase-billing-rest-rw
+    - supabase-billing-runtime
+    - supabase-billing-storage
+    - supabase-billing-studio
+    allowClusterScoped: false
+    forceConflictObjects:
+    - apps/Deployment/supabase-billing/supabase-billing-auth
+    - apps/Deployment/supabase-billing/supabase-billing-realtime
+    - apps/Deployment/supabase-billing/supabase-billing-rest-ro
+    - apps/Deployment/supabase-billing/supabase-billing-rest-rw
+    - cilium.io/CiliumNetworkPolicy/supabase-billing/supabase-billing-pigsty
+    - cilium.io/CiliumNetworkPolicy/supabase-billing/supabase-billing-public-edge
+    - core/ConfigMap/supabase-billing/supabase-billing-env
+    - core/ConfigMap/supabase-billing/supabase-billing-kong-config
+    - core/PersistentVolumeClaim/supabase-billing/supabase-billing-storage
+    - core/ResourceQuota/supabase-billing/supabase-billing-quota
+    - core/Service/supabase-billing/supabase-billing
+    - core/Service/supabase-billing/supabase-billing-auth
+    - core/Service/supabase-billing/supabase-billing-imgproxy
+    - core/Service/supabase-billing/supabase-billing-kong
+    - core/Service/supabase-billing/supabase-billing-meta
+    - core/Service/supabase-billing/supabase-billing-realtime
+    - core/Service/supabase-billing/supabase-billing-rest
+    - core/Service/supabase-billing/supabase-billing-rest-ro
+    - core/Service/supabase-billing/supabase-billing-storage
+    - core/Service/supabase-billing/supabase-billing-studio
+    - gateway.networking.k8s.io/HTTPRoute/supabase-billing/supabase-billing-api
+    - gateway.networking.k8s.io/HTTPRoute/supabase-billing/supabase-billing-studio
+    - networking.k8s.io/Ingress/supabase-billing/supabase-billing-dns
+    - networking.k8s.io/NetworkPolicy/supabase-billing/supabase-billing-default-deny
+    - networking.k8s.io/NetworkPolicy/supabase-billing/supabase-billing-runtime
+  inventory:
+    digest: sha256:9d0dc3ab802802e3bc0b72d77fb6ece6d88f54ce97e1315c5476a0eec514cff4
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

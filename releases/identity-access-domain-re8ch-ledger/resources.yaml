@@ -1,0 +1,463 @@
+---
+apiVersion: v1
+data:
+  processor.yaml: "PlatformConfig: null\nmetadata:\n  annotations:\n    saas.re8ch.com/code-image:\
+    \ registry.re8ch.com/ledger/processor-ledger-api-gateway:public-edge-20260608195533\n\
+    \    saas.re8ch.com/config-hash: f40700f9cc8cc8f3\n    saas.re8ch.com/config-sources:\
+    \ EnvFile//var/folders/k4/1wc3dy2x48l9p7zzms1bhb_80000gn/T/tmp.b7GP0T9zyc/ledger-gateway.env@\n\
+    \    saas.re8ch.com/migrated-at: '2026-06-02T17:40:00+08:00'\n    saas.re8ch.com/migrated-from-namespace:\
+    \ nuclio\n    saas.re8ch.com/registry-migrated-from: registry.re8ch.com/nuclio/processor-ledger-api-gateway:gateway-ro-rw-native-graph-only-20260531213500\n\
+    \  labels:\n    ledger.re8ch.com/component: api-gateway\n    nuclio.io/app: functionres\n\
+    \    nuclio.io/class: function\n    nuclio.io/function-name: ledger-api-gateway\n\
+    \    nuclio.io/function-version: latest\n    nuclio.io/project-name: default\n\
+    \    saas.re8ch.com/function: api-gateway\n    saas.re8ch.com/layer: prod\n  \
+    \  saas.re8ch.com/product: ledger\n    saas.re8ch.com/region: shanghai\n    saas.re8ch.com/tenant:\
+    \ ledger\n  name: ledger-api-gateway\n  namespace: ledger\nspec:\n  alias: latest\n\
+    \  build:\n    codeEntryType: image\n    registry: registry.re8ch.com/ledger\n\
+    \    noBaseImagesPull: true\n  description: Ledger API gateway for WeChat auth\
+    \ and PostgREST RPC.\n  disableDefaultHTTPTrigger: false\n  env:\n  - name: LEDGER_EDGE_DOMAIN_SUFFIX\n\
+    \    value: re8ch.com\n  - name: LEDGER_EDGE_NAME\n    value: api-guangzhou24\n\
+    \  - name: LEDGER_EDGE_REGION\n    value: guangzhou\n  - name: LEDGER_EDGE_REGIONS\n\
+    \    value: api-guangzhou24,guangzhou,ok api-shanghai217,shanghai,ok api-shanghai77,shanghai,ok\n\
+    \  - name: LEDGER_POSTGREST_RO_URL\n    value: https://db-ro.re8ch.com/ledger\n\
+    \  - name: LEDGER_POSTGREST_RW_URL\n    value: https://db-rw.re8ch.com/ledger\n\
+    \  - name: LEDGER_POSTGREST_UPSTREAM_RO_URL\n    value: https://db-ro.re8ch.com/ledger\n\
+    \  - name: LEDGER_POSTGREST_UPSTREAM_RW_URL\n    value: https://db-rw.re8ch.com/ledger\n\
+    \  - name: LEDGER_REGION_TTL_SECONDS\n    value: '300'\n  - name: SAAS_DNS_SERVERS\n\
+    \    value: 223.5.5.5:53,119.29.29.29:53,1.1.1.1:53\n  - name: SAAS_FUNCTION\n\
+    \    value: api-gateway\n  - name: SAAS_LAYER\n    value: prod\n  - name: SAAS_PRODUCT\n\
+    \    value: ledger\n  - name: SAAS_REGION\n    value: guangzhou\n  - name: SAAS_TENANT\n\
+    \    value: ledger\n  eventTimeout: 60s\n  handler: main:Handler\n  image: registry.re8ch.com/ledger/processor-ledger-api-gateway:public-edge-20260608195533\n\
+    \  lastDeployTimestamp: '1780920720744807000'\n  livenessProbe:\n    failureThreshold:\
+    \ 3\n    initialDelaySeconds: 10\n    periodSeconds: 5\n    timeoutSeconds: 3\n\
+    \  maxReplicas: 1\n  minReplicas: 1\n  nodeSelector:\n    kubernetes.io/hostname:\
+    \ qwen-1\n    pigsty.cc/workload: nuclio\n  platform: {}\n  readinessProbe:\n\
+    \    failureThreshold: 10\n    initialDelaySeconds: 5\n    periodSeconds: 1\n\
+    \    timeoutSeconds: 1\n  readinessTimeoutSeconds: 180\n  resources:\n    requests:\n\
+    \      cpu: 25m\n      memory: 1Mi\n  runRegistry: registry.re8ch.com/ledger\n\
+    \  runtime: golang\n  securityContext: {}\n  streamChunkTimeout: ''\n  targetCPU:\
+    \ 75\n  triggers:\n    http:\n      attributes:\n        port: 30286\n       \
+    \ serviceType: NodePort\n        streamingFlushPeriod: 500ms\n      class: ''\n\
+    \      kind: http\n      maxWorkers: 16\n      mode: sync\n      name: http\n\
+    \      numWorkers: 32\n  version: -1\n"
+kind: ConfigMap
+metadata:
+  labels:
+    ledger.re8ch.com/component: api-gateway
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-api-gateway
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: api-gateway
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-api-gateway
+  namespace: re8ch-ledger
+---
+apiVersion: v1
+data:
+  processor.yaml: "PlatformConfig: null\nmetadata:\n  annotations:\n    saas.re8ch.com/code-image:\
+    \ registry.re8ch.com/ledger/processor-ledger-gnucash-report-runner:public-dns-20260608195533\n\
+    \    saas.re8ch.com/config-hash: 9f6092d915312268\n    saas.re8ch.com/config-sources:\
+    \ EnvFile//var/folders/k4/1wc3dy2x48l9p7zzms1bhb_80000gn/T/tmp.dClyuvG4p2/ledger-report.env@\n\
+    \    saas.re8ch.com/migrated-at: \"2026-06-02T17:40:00+08:00\"\n    saas.re8ch.com/migrated-from-namespace:\
+    \ nuclio\n    saas.re8ch.com/registry-migrated-from: registry.re8ch.com/nuclio/processor-ledger-gnucash-report-runner:native-graph-only-20260531213500\n\
+    \  labels:\n    ledger.re8ch.com/component: report-runner\n    nuclio.io/app:\
+    \ functionres\n    nuclio.io/class: function\n    nuclio.io/function-name: ledger-gnucash-report-runner\n\
+    \    nuclio.io/function-version: latest\n    nuclio.io/project-name: default\n\
+    \    saas.re8ch.com/function: gnucash-report-runner\n    saas.re8ch.com/layer:\
+    \ prod\n    saas.re8ch.com/product: ledger\n    saas.re8ch.com/region: shanghai\n\
+    \    saas.re8ch.com/tenant: ledger\n  name: ledger-gnucash-report-runner\n  namespace:\
+    \ ledger\nspec:\n  alias: latest\n  build:\n    codeEntryType: image\n    noBaseImagesPull:\
+    \ true\n    registry: registry.re8ch.com/ledger\n  description: Native Go GnuCash\
+    \ graph report engine returning Chart JSON.\n  disableDefaultHTTPTrigger: false\n\
+    \  env:\n  - name: POSTGREST_BASE_URL\n    value: https://db-ro.re8ch.com/ledger\n\
+    \  - name: SAAS_DNS_SERVERS\n    value: 223.5.5.5:53,119.29.29.29:53,1.1.1.1:53\n\
+    \  - name: SAAS_FUNCTION\n    value: gnucash-report-runner\n  - name: SAAS_LAYER\n\
+    \    value: prod\n  - name: SAAS_PRODUCT\n    value: ledger\n  - name: SAAS_REGION\n\
+    \    value: guangzhou\n  - name: SAAS_TENANT\n    value: ledger\n  eventTimeout:\
+    \ 120s\n  handler: main:Handler\n  image: registry.re8ch.com/ledger/processor-ledger-gnucash-report-runner:public-dns-20260608195533\n\
+    \  lastDeployTimestamp: \"1780393714664160943\"\n  livenessProbe:\n    failureThreshold:\
+    \ 3\n    initialDelaySeconds: 10\n    periodSeconds: 5\n    timeoutSeconds: 3\n\
+    \  maxReplicas: 2\n  minReplicas: 1\n  nodeSelector:\n    kubernetes.io/hostname:\
+    \ qwen-1\n    pigsty.cc/workload: nuclio\n  platform: {}\n  readinessProbe:\n\
+    \    failureThreshold: 10\n    initialDelaySeconds: 5\n    periodSeconds: 1\n\
+    \    timeoutSeconds: 1\n  readinessTimeoutSeconds: 180\n  resources:\n    limits:\n\
+    \      cpu: \"2\"\n      memory: 2Gi\n    requests:\n      cpu: 100m\n      memory:\
+    \ 512Mi\n  runRegistry: registry.re8ch.com/ledger\n  runtime: golang\n  securityContext:\
+    \ {}\n  streamChunkTimeout: \"\"\n  targetCPU: 75\n  triggers:\n    http:\n  \
+    \    attributes:\n        maxRequestBodySize: 10485760\n        serviceType: NodePort\n\
+    \        streamingFlushPeriod: 1s\n      class: \"\"\n      kind: http\n     \
+    \ maxWorkers: 4\n      mode: sync\n      name: http\n      numWorkers: 16\n  version:\
+    \ -1\n"
+kind: ConfigMap
+metadata:
+  labels:
+    ledger.re8ch.com/component: report-runner
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-gnucash-report-runner
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: gnucash-report-runner
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-gnucash-report-runner
+  namespace: re8ch-ledger
+---
+apiVersion: v1
+data:
+  processor.yaml: "PlatformConfig: null\nmetadata:\n  annotations:\n    saas.re8ch.com/code-image:\
+    \ registry.re8ch.com/ledger/processor-ledger-wechat-auth:identity-20260528165957\n\
+    \    saas.re8ch.com/migrated-at: \"2026-06-02T17:40:00+08:00\"\n    saas.re8ch.com/migrated-from-namespace:\
+    \ nuclio\n    saas.re8ch.com/registry-migrated-from: registry.re8ch.com/nuclio/processor-ledger-wechat-auth:identity-20260528165957\n\
+    \  labels:\n    nuclio.io/app: functionres\n    nuclio.io/class: function\n  \
+    \  nuclio.io/function-name: ledger-wechat-auth\n    nuclio.io/function-version:\
+    \ latest\n    nuclio.io/project-name: default\n    saas.re8ch.com/layer: prod\n\
+    \    saas.re8ch.com/product: ledger\n    saas.re8ch.com/region: shanghai\n   \
+    \ saas.re8ch.com/tenant: ledger\n  name: ledger-wechat-auth\n  namespace: ledger\n\
+    spec:\n  alias: latest\n  build:\n    codeEntryType: image\n    functionConfigPath:\
+    \ /tmp/ledger-nuclio-migration/ledger-wechat-auth.json\n    noBaseImagesPull:\
+    \ true\n    registry: registry.re8ch.com/ledger\n  description: Exchange Ledger\
+    \ identities, verification codes and collaboration notifications\n    for PostgREST\
+    \ JWTs.\n  disableDefaultHTTPTrigger: false\n  env:\n  - name: WECHAT_APPID\n\
+    \    value: wx126e6860dc490b87\n  - name: WECHAT_APPSECRET\n    valueFrom:\n \
+    \     secretKeyRef:\n        key: WECHAT_APPSECRET\n        name: ledger-wechat-auth\n\
+    \  - name: POSTGREST_JWT_SECRET\n    valueFrom:\n      secretKeyRef:\n       \
+    \ key: POSTGREST_JWT_SECRET\n        name: ledger-wechat-auth\n  - name: POSTGREST_ROLE\n\
+    \    value: ledger_app_rw\n  - name: POSTGREST_SERVICE_ROLE\n    value: ledger_pgrst\n\
+    \  - name: POSTGREST_BASE_URL\n    value: https://db-rw.re8ch.com/ledger\n  -\
+    \ name: JWT_TTL_SECONDS\n    value: \"604800\"\n  - name: VERIFICATION_CODE_TTL_SECONDS\n\
+    \    value: \"600\"\n  - name: TENCENT_SMS_REGION\n    value: ap-guangzhou\n \
+    \ - name: TENCENT_SECRET_ID\n    valueFrom:\n      secretKeyRef:\n        key:\
+    \ TENCENT_SECRET_ID\n        name: ledger-wechat-auth\n        optional: true\n\
+    \  - name: TENCENT_SECRET_KEY\n    valueFrom:\n      secretKeyRef:\n        key:\
+    \ TENCENT_SECRET_KEY\n        name: ledger-wechat-auth\n        optional: true\n\
+    \  - name: TENCENT_SMS_SDK_APP_ID\n    value: \"1401011989\"\n  - name: TENCENT_SMS_APP_KEY\n\
+    \    valueFrom:\n      secretKeyRef:\n        key: TENCENT_SMS_APP_KEY\n     \
+    \   name: ledger-wechat-auth\n        optional: true\n  - name: TENCENT_SMS_SIGN_NAME\n\
+    \    valueFrom:\n      secretKeyRef:\n        key: TENCENT_SMS_SIGN_NAME\n   \
+    \     name: ledger-wechat-auth\n        optional: true\n  - name: TENCENT_SMS_TEMPLATE_ID\n\
+    \    valueFrom:\n      secretKeyRef:\n        key: TENCENT_SMS_TEMPLATE_ID\n \
+    \       name: ledger-wechat-auth\n        optional: true\n  - name: SMTP_HOST\n\
+    \    value: smtp.feishu.cn\n  - name: SMTP_PORT\n    value: \"465\"\n  - name:\
+    \ SMTP_USER\n    valueFrom:\n      secretKeyRef:\n        key: SMTP_USER\n   \
+    \     name: ledger-wechat-auth\n        optional: true\n  - name: SMTP_PASSWORD\n\
+    \    valueFrom:\n      secretKeyRef:\n        key: SMTP_PASSWORD\n        name:\
+    \ ledger-wechat-auth\n        optional: true\n  - name: SMTP_FROM\n    valueFrom:\n\
+    \      secretKeyRef:\n        key: SMTP_FROM\n        name: ledger-wechat-auth\n\
+    \        optional: true\n  - name: WECHAT_INVITE_TEMPLATE_ID\n    valueFrom:\n\
+    \      secretKeyRef:\n        key: WECHAT_INVITE_TEMPLATE_ID\n        name: ledger-wechat-auth\n\
+    \        optional: true\n  eventTimeout: 30s\n  handler: handler:handler\n  image:\
+    \ registry.re8ch.com/ledger/processor-ledger-wechat-auth:identity-20260528165957\n\
+    \  lastDeployTimestamp: \"1780393740492117058\"\n  livenessProbe:\n    failureThreshold:\
+    \ 3\n    initialDelaySeconds: 10\n    periodSeconds: 5\n    timeoutSeconds: 3\n\
+    \  maxReplicas: 1\n  minReplicas: 1\n  nodeSelector:\n    kubernetes.io/hostname:\
+    \ qwen-1\n    pigsty.cc/workload: nuclio\n  platform: {}\n  readinessProbe:\n\
+    \    failureThreshold: 10\n    initialDelaySeconds: 5\n    periodSeconds: 1\n\
+    \    timeoutSeconds: 1\n  readinessTimeoutSeconds: 180\n  resources:\n    requests:\n\
+    \      cpu: 25m\n      memory: 64Mi\n  runRegistry: registry.re8ch.com/ledger\n\
+    \  runtime: python:3.11\n  securityContext: {}\n  streamChunkTimeout: \"\"\n \
+    \ targetCPU: 75\n  triggers:\n    http:\n      attributes:\n        port: 30383\n\
+    \        serviceType: NodePort\n        streamingFlushPeriod: 1s\n      class:\
+    \ \"\"\n      kind: http\n      mode: sync\n      name: http\n      numWorkers:\
+    \ 1\n  version: -1\n"
+kind: ConfigMap
+metadata:
+  labels:
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-wechat-auth
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-wechat-auth
+  namespace: re8ch-ledger
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    ledger.re8ch.com/routing: local-edge
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/tenant: ledger
+  name: ledger-api-gateway-local
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    nuclio.io/function-name: ledger-api-gateway
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    ledger.re8ch.com/routing: local-edge
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/tenant: ledger
+  name: ledger-gnucash-report-runner-local
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    nuclio.io/function-name: ledger-gnucash-report-runner
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    ledger.re8ch.com/routing: local-edge
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/tenant: ledger
+  name: ledger-wechat-auth-local
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    nuclio.io/function-name: ledger-wechat-auth
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    ledger.re8ch.com/component: api-gateway
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-api-gateway
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: api-gateway
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-api-gateway
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: metrics
+    port: 8090
+    protocol: TCP
+    targetPort: 8090
+  selector:
+    ledger.re8ch.com/component: api-gateway
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-api-gateway
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: api-gateway
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    ledger.re8ch.com/component: report-runner
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-gnucash-report-runner
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: gnucash-report-runner
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-gnucash-report-runner
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: metrics
+    port: 8090
+    protocol: TCP
+    targetPort: 8090
+  selector:
+    ledger.re8ch.com/component: report-runner
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-gnucash-report-runner
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/function: gnucash-report-runner
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-wechat-auth
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  name: nuclio-ledger-wechat-auth
+  namespace: re8ch-ledger
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  - name: metrics
+    port: 8090
+    protocol: TCP
+    targetPort: 8090
+  selector:
+    nuclio.io/app: functionres
+    nuclio.io/class: function
+    nuclio.io/function-name: ledger-wechat-auth
+    nuclio.io/function-version: latest
+    nuclio.io/project-name: default
+    saas.re8ch.com/layer: prod
+    saas.re8ch.com/product: ledger
+    saas.re8ch.com/region: shanghai
+    saas.re8ch.com/tenant: ledger
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ledger-public
+  namespace: re8ch-ledger
+spec:
+  hostnames:
+  - api.re8ch.com
+  - api-shanghai77.re8ch.com
+  - api-shanghai217.re8ch.com
+  - api-guangzhou24.re8ch.com
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: http
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: api-https
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: api-sh77-https
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: api-sh217-https
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: api-gz24-https
+  rules:
+  - backendRefs:
+    - group: ''
+      kind: Service
+      name: ledger-wechat-auth-local
+      port: 8080
+      weight: 1
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replacePrefixMatch: /
+          type: ReplacePrefixMatch
+    matches:
+    - path:
+        type: PathPrefix
+        value: /ledger-wechat-auth
+  - backendRefs:
+    - group: ''
+      kind: Service
+      name: ledger-gnucash-report-runner-local
+      port: 8080
+      weight: 1
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replacePrefixMatch: /
+          type: ReplacePrefixMatch
+    matches:
+    - path:
+        type: PathPrefix
+        value: /ledger-gnucash-report-runner
+  - backendRefs:
+    - group: ''
+      kind: Service
+      name: ledger-api-gateway-local
+      port: 8080
+      weight: 1
+    matches:
+    - path:
+        type: PathPrefix
+        value: /ledger
+    - path:
+        type: PathPrefix
+        value: /wechat
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-public-ledger
+  namespace: re8ch-ledger
+spec:
+  ingress:
+  - ports:
+    - port: 8080
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Ingress

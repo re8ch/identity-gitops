@@ -1,0 +1,882 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secretary-api
+  namespace: re8ch-secretary
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secretary-api
+    spec:
+      containers:
+      - command:
+        - uvicorn
+        - secretary.api:app
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8081'
+        env:
+        - name: RESTATE_INGRESS_URL
+          value: http://restate:8080
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_RW
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        - name: SECRETARY_INTERACTION_MODE
+          value: shadow
+        - name: SECRETARY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: webhook-secret
+              name: secretary-runtime
+        - name: SECRETARY_QUERY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: query-token
+              name: secretary-runtime
+        - name: BLUEBUBBLES_WEBHOOK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: bluebubbles-webhook-token
+              name: secretary-runtime
+        - name: VOICE_WEBHOOK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: voice-webhook-token
+              name: secretary-runtime
+        - name: SECRETARY_IDENTITY_BINDINGS
+          valueFrom:
+            secretKeyRef:
+              key: identity-bindings-json
+              name: secretary-runtime
+        - name: SECRETARY_PUBLIC_BASE_URL
+          value: https://tools.re8ch.com
+        - name: SMTP_HOST
+          value: stalwart.mail-system.svc.cluster.local
+        - name: SMTP_PORT
+          value: '587'
+        - name: SMTP_STARTTLS
+          value: 'true'
+        - name: SMTP_FROM
+          valueFrom:
+            secretKeyRef:
+              key: email
+              name: secretary-email
+        - name: SMTP_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: secretary-email
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: secretary-email
+        - name: SMTP_TLS_FINGERPRINT_SHA256
+          valueFrom:
+            secretKeyRef:
+              key: tls-fingerprint-sha256
+              name: secretary-email
+        - name: SECRETARY_NOTIFY_TO
+          valueFrom:
+            secretKeyRef:
+              key: recipient
+              name: secretary-email
+        - name: SECRETARY_NOTIFY_RECIPIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: recipient-id
+              name: secretary-email
+        - name: SECRETARY_ACK_TIMEOUT_SECONDS
+          value: '900'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        name: api
+        ports:
+        - containerPort: 8081
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 6
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      initContainers:
+      - args:
+        - import os; from secretary.ledger import PostgresLedger; PostgresLedger(os.environ['SECRETARY_DATABASE_URL']).migrate()
+        command:
+        - python
+        - -c
+        env:
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_MIGRATOR
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: migrate
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secretary-cluster-watcher
+  namespace: re8ch-secretary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-cluster-watcher
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secretary-cluster-watcher
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - secretary.cluster_watcher
+        env:
+        - name: SECRETARY_API_URL
+          value: http://secretary-api/v1/observations
+        - name: SECRETARY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: webhook-secret
+              name: secretary-runtime
+        - name: SECRETARY_NOTIFY_TO
+          valueFrom:
+            secretKeyRef:
+              key: recipient
+              name: secretary-email
+        - name: SECRETARY_NOTIFY_RECIPIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: recipient-id
+              name: secretary-email
+        - name: SECRETARY_PUBLIC_PROBES_JSON
+          value: '[{"name":"harbor","url":"https://registry.re8ch.com/api/v2.0/health","severity":"high","failure_threshold":3},{"name":"stalwart-jmap","url":"https://id.re8ch.com/.well-known/jmap","severity":"high","failure_threshold":3}]'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: watcher
+        resources:
+          limits:
+            cpu: 200m
+            memory: 192Mi
+          requests:
+            cpu: 20m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary-cluster-observer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secretary-delivery-manager
+  namespace: re8ch-secretary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-delivery-manager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secretary-delivery-manager
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - secretary.delivery_manager
+        env:
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_RW
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        - name: DELIVERY_UNKNOWN_AFTER_SECONDS
+          value: '300'
+        - name: DELIVERY_RECONCILE_INTERVAL_SECONDS
+          value: '30'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: manager
+        resources:
+          limits:
+            cpu: 200m
+            memory: 192Mi
+          requests:
+            cpu: 20m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secretary-projector
+  namespace: re8ch-secretary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-projector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secretary-projector
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - secretary.projector
+        env:
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_RW
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        - name: NEO4J_URI
+          valueFrom:
+            secretKeyRef:
+              key: neo4j-uri
+              name: secretary-runtime
+        - name: NEO4J_USER
+          valueFrom:
+            secretKeyRef:
+              key: neo4j-user
+              name: secretary-runtime
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: neo4j-password
+              name: secretary-runtime
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: projector
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      initContainers:
+      - args:
+        - import os; from secretary.ledger import PostgresLedger; PostgresLedger(os.environ['SECRETARY_DATABASE_URL']).migrate()
+        command:
+        - python
+        - -c
+        env:
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_MIGRATOR
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: migrate
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secretary-runtime
+  namespace: re8ch-secretary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-runtime
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secretary-runtime
+    spec:
+      containers:
+      - env:
+        - name: LITELLM_URL
+          value: http://litellm.llm-gateway.svc.cluster.local:4000
+        - name: LITELLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: litellm-api-key
+              name: secretary-runtime
+        - name: SECRETARY_MODEL
+          value: gpt-5.6-luna
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: runtime
+        ports:
+        - containerPort: 9080
+          name: service
+        readinessProbe:
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          tcpSocket:
+            port: service
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      initContainers:
+      - args:
+        - import os; from secretary.ledger import PostgresLedger; PostgresLedger(os.environ['SECRETARY_DATABASE_URL']).migrate()
+        command:
+        - python
+        - -c
+        env:
+        - name: SECRETARY_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: DATABASE_URL_MIGRATOR
+              name: secretary-db-credentials
+        - name: SECRETARY_DATABASE_HOST_OVERRIDE
+          value: pgwrite.pigsty-external.svc.cluster.local
+        - name: SECRETARY_DATABASE_PORT_OVERRIDE
+          value: '5432'
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: migrate
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/component: channel-registry
+  name: secretary-channel-registry-v2
+  namespace: re8ch-secretary
+spec:
+  backoffLimit: 8
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: channel-registry
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - secretary.register_channels
+        env:
+        - name: SECRETARY_CHANNEL_REGISTRY
+          valueFrom:
+            configMapKeyRef:
+              key: channels.json
+              name: secretary-channel-registry-v1
+        - name: SECRETARY_API_URL
+          value: http://secretary-api
+        - name: SECRETARY_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: webhook-secret
+              name: secretary-runtime
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: register
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: secretary
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: secretary-register-v0-3-3
+  namespace: re8ch-secretary
+spec:
+  backoffLimit: 8
+  template:
+    spec:
+      containers:
+      - args:
+        - "import json,time,urllib.request\nurl='http://restate:9070/deployments'\n\
+          body=json.dumps({'uri':'http://secretary-runtime:9080'}).encode()\nfor attempt\
+          \ in range(60):\n    try:\n        request=urllib.request.Request(url,data=body,method='POST',headers={'Content-Type':'application/json'})\n\
+          \        urllib.request.urlopen(request,timeout=5).read(); break\n    except\
+          \ Exception:\n        if attempt == 59: raise\n        time.sleep(2)\n"
+        command:
+        - python
+        - -c
+        image: registry.re8ch.com/secretary-system/secretary-system@sha256:7101b40a67eac49a6d4cc0045660dd457d42887c5f6491c788ef136adebfd3fb
+        name: register
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: secretary-api-gateway-ingress
+  namespace: re8ch-secretary
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-api
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '8081'
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: secretary-cluster-watcher-kube-api
+  namespace: re8ch-secretary
+spec:
+  egress:
+  - toEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: '443'
+        protocol: TCP
+      - port: '6443'
+        protocol: TCP
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-cluster-watcher
+---
+apiVersion: v1
+data:
+  restate.toml: 'roles = ["worker", "admin", "metadata-server", "log-server", "http-ingress"]
+
+    base-dir = "/restate-data"
+
+    '
+kind: ConfigMap
+metadata:
+  name: restate-config
+  namespace: re8ch-secretary
+---
+apiVersion: v1
+data:
+  channels.json: "[\n  {\n    \"endpoint_id\": \"telegram-re8ch-incident-response\"\
+    ,\n    \"registered\": true,\n    \"platform\": \"telegram\",\n    \"display_name\"\
+    : \"Re8ch Incident Response\",\n    \"destination\": {\"kind\": \"supergroup\"\
+    , \"binding_ref\": \"incidentrelay-channel:1\"},\n    \"purpose\": \"critical\
+    \ incident response and human acknowledgement\",\n    \"severity\": [\"critical\"\
+    ],\n    \"owner\": \"platform\",\n    \"service\": \"re8ch-cluster\",\n    \"\
+    incidentrelay\": {\"channel_id\": 1, \"route_id\": 1, \"route_name\": \"Cluster\
+    \ Critical Alerts\"},\n    \"delivery_path\": \"alertmanager -> incidentrelay\
+    \ -> telegram\",\n    \"healthy\": true\n  },\n  {\n    \"endpoint_id\": \"telegram-re8ch-cluster-alerts\"\
+    ,\n    \"registered\": true,\n    \"platform\": \"telegram\",\n    \"display_name\"\
+    : \"Re8ch Cluster Alerts\",\n    \"destination\": {\"kind\": \"supergroup\", \"\
+    binding_ref\": \"incidentrelay-channel:2\"},\n    \"purpose\": \"actionable cluster\
+    \ warning alerts\",\n    \"severity\": [\"warning\"],\n    \"owner\": \"platform\"\
+    ,\n    \"service\": \"re8ch-cluster\",\n    \"incidentrelay\": {\"channel_id\"\
+    : 2, \"route_id\": 2, \"route_name\": \"Cluster Warning Alerts\"},\n    \"delivery_path\"\
+    : \"alertmanager -> incidentrelay -> telegram\",\n    \"healthy\": true\n  },\n\
+    \  {\n    \"endpoint_id\": \"telegram-re8ch-cluster-events\",\n    \"registered\"\
+    : true,\n    \"platform\": \"telegram\",\n    \"display_name\": \"Re8ch Cluster\
+    \ Events\",\n    \"destination\": {\"kind\": \"supergroup\", \"binding_ref\":\
+    \ \"incidentrelay-channel:3\"},\n    \"purpose\": \"informational cluster lifecycle\
+    \ events\",\n    \"severity\": [\"info\"],\n    \"owner\": \"platform\",\n   \
+    \ \"service\": \"re8ch-cluster\",\n    \"incidentrelay\": {\"channel_id\": 3,\
+    \ \"route_id\": 3, \"route_name\": \"Cluster Informational Events\"},\n    \"\
+    delivery_path\": \"alertmanager -> incidentrelay -> telegram\",\n    \"healthy\"\
+    : true\n  }\n]\n"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: channel-registry
+  name: secretary-channel-registry-v1
+  namespace: re8ch-secretary
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restate-data
+  namespace: re8ch-secretary
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+  volumeName: pvc-3d6ed56d-57c7-4d29-8cfa-2a2b1df17a5f
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: restate
+  namespace: re8ch-secretary
+spec:
+  ports:
+  - name: ingress
+    port: 8080
+    targetPort: ingress
+  - name: admin
+    port: 9070
+    targetPort: admin
+  selector:
+    app.kubernetes.io/name: restate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: delivery-management-intake
+  name: secretary-alertmanager-intake
+  namespace: re8ch-secretary
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: secretary-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: secretary-api
+  namespace: re8ch-secretary
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: secretary-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: secretary-runtime
+  namespace: re8ch-secretary
+spec:
+  ports:
+  - name: service
+    port: 9080
+    targetPort: service
+  selector:
+    app.kubernetes.io/name: secretary-runtime
+---
+apiVersion: v1
+automountServiceAccountToken: false
+imagePullSecrets:
+- name: harbor-secretary-system-admin
+kind: ServiceAccount
+metadata:
+  name: secretary
+  namespace: re8ch-secretary
+---
+apiVersion: v1
+imagePullSecrets:
+- name: harbor-secretary-system-admin
+kind: ServiceAccount
+metadata:
+  name: secretary-cluster-observer
+  namespace: re8ch-secretary
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: secretary-channel-webhooks
+  namespace: re8ch-secretary
+spec:
+  hostnames:
+  - tools.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: tools-https
+  rules:
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/channels/
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    matches:
+    - path:
+        type: Exact
+        value: /v1/event-stream
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: secretary-headlamp-read
+  namespace: re8ch-secretary
+spec:
+  hostnames:
+  - headlamp.service.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: service-wildcard-https
+  rules:
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /v1/headlamp/event-stream
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /secretary-api/v1/event-stream
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /v1/headlamp/delivery-summary
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /secretary-api/v1/delivery-summary
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /v1/headlamp/topology
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /secretary-api/v1/topology
+  - backendRefs:
+    - name: secretary-api
+      port: 80
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /v1/headlamp/discrepancies
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /secretary-api/v1/discrepancies
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secretary-default-deny
+  namespace: re8ch-secretary
+spec:
+  egress:
+  - to:
+    - namespaceSelector: {}
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    - port: 80
+      protocol: TCP
+    - port: 443
+      protocol: TCP
+    - port: 5432
+      protocol: TCP
+    - port: 7687
+      protocol: TCP
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: re8ch-secretary
+    ports:
+    - port: 8080
+      protocol: TCP
+    - port: 8081
+      protocol: TCP
+    - port: 9070
+      protocol: TCP
+    - port: 9080
+      protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability-system
+    ports:
+    - port: 8081
+      protocol: TCP
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - port: 8081
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: secretary-api
+  namespace: re8ch-secretary
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: secretary-api

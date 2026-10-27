@@ -1,0 +1,11 @@
+---
+apiVersion: workspace.re8ch.com/v1alpha1
+kind: AgentSession
+metadata:
+  labels:
+    governance.re8ch.com/account: re8ch-core-maintain
+    governance.re8ch.com/project: re8ch-core
+  name: re8ch-owner-pilot-20260825
+  namespace: ai-operations
+spec:
+  identityRef: re8ch-core-maintain

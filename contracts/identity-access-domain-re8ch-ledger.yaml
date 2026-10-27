@@ -1,0 +1,63 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-re8ch-ledger
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: re8ch-ledger
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-re8ch-ledger
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-re8ch-ledger
+    resources:
+    - core/ConfigMap
+    - core/Service
+    - gateway.networking.k8s.io/HTTPRoute
+    - networking.k8s.io/NetworkPolicy
+    objectNames:
+    - allow-public-ledger
+    - ledger-api-gateway-local
+    - ledger-gnucash-report-runner-local
+    - ledger-public
+    - ledger-wechat-auth-local
+    - nuclio-ledger-api-gateway
+    - nuclio-ledger-gnucash-report-runner
+    - nuclio-ledger-wechat-auth
+    allowClusterScoped: false
+    forceConflictObjects:
+    - core/ConfigMap/re8ch-ledger/nuclio-ledger-api-gateway
+    - core/ConfigMap/re8ch-ledger/nuclio-ledger-gnucash-report-runner
+    - core/ConfigMap/re8ch-ledger/nuclio-ledger-wechat-auth
+    - core/Service/re8ch-ledger/ledger-api-gateway-local
+    - core/Service/re8ch-ledger/ledger-gnucash-report-runner-local
+    - core/Service/re8ch-ledger/ledger-wechat-auth-local
+    - core/Service/re8ch-ledger/nuclio-ledger-api-gateway
+    - core/Service/re8ch-ledger/nuclio-ledger-gnucash-report-runner
+    - core/Service/re8ch-ledger/nuclio-ledger-wechat-auth
+    - gateway.networking.k8s.io/HTTPRoute/re8ch-ledger/ledger-public
+    - networking.k8s.io/NetworkPolicy/re8ch-ledger/allow-public-ledger
+  inventory:
+    digest: sha256:f0beebf8064d6c4e769a7000141896f35c06ae1fd6190d1999edb06a8a3d413d
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

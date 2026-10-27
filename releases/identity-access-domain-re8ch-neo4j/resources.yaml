@@ -1,0 +1,236 @@
+---
+apiVersion: v1
+data:
+  apoc.conf: 'apoc.export.file.enabled=true
+
+    apoc.import.file.enabled=true
+
+    apoc.import.file.use_neo4j_config=true
+
+    apoc.http.timeout.connect=10000
+
+    apoc.http.timeout.read=60000
+
+    '
+  postgrest-sources.json: "[\n  {\n    \"name\": \"compocv\",\n    \"readBaseUrl\"\
+    : \"https://db-ro.re8ch.com/compocv\",\n    \"writeBaseUrl\": \"https://db-rw.re8ch.com/compocv\"\
+    ,\n    \"openApiUrl\": \"https://db-ro.re8ch.com/compocv/\"\n  },\n  {\n    \"\
+    name\": \"image\",\n    \"readBaseUrl\": \"https://db-ro.re8ch.com/image\",\n\
+    \    \"writeBaseUrl\": \"https://db-rw.re8ch.com/image\",\n    \"openApiUrl\"\
+    : \"https://db-ro.re8ch.com/image/\"\n  },\n  {\n    \"name\": \"ledger\",\n \
+    \   \"readBaseUrl\": \"https://db-ro.re8ch.com/ledger\",\n    \"writeBaseUrl\"\
+    : \"https://db-rw.re8ch.com/ledger\",\n    \"openApiUrl\": \"https://db-ro.re8ch.com/ledger/\"\
+    \n  }\n]\n"
+kind: ConfigMap
+metadata:
+  name: neo4j-config
+  namespace: re8ch-neo4j
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: data-ledger-casegraph-0
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: rbd-r640
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: data-ledger-economicsgraph-0
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: rbd-r640
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: data-neo4j-0
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: rbd-r640
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: ledger-casegraph-backups
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: ledger-economicsgraph-backups
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: plugins-neo4j-0
+  namespace: re8ch-neo4j
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ledger-casegraph
+    app.kubernetes.io/part-of: ledger
+  name: ledger-casegraph
+  namespace: re8ch-neo4j
+spec:
+  ports:
+  - name: http
+    port: 7474
+    protocol: TCP
+    targetPort: http
+  - name: bolt
+    port: 7687
+    protocol: TCP
+    targetPort: bolt
+  selector:
+    app.kubernetes.io/name: ledger-casegraph
+    app.kubernetes.io/part-of: ledger
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: ledger-economicsgraph
+    app.kubernetes.io/part-of: ledger
+  name: ledger-economicsgraph
+  namespace: re8ch-neo4j
+spec:
+  ports:
+  - name: http
+    port: 7474
+    protocol: TCP
+    targetPort: http
+  - name: bolt
+    port: 7687
+    protocol: TCP
+    targetPort: bolt
+  selector:
+    app.kubernetes.io/name: ledger-economicsgraph
+    app.kubernetes.io/part-of: ledger
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: neo4j
+  name: neo4j
+  namespace: re8ch-neo4j
+spec:
+  ports:
+  - name: http
+    port: 7474
+    protocol: TCP
+    targetPort: http
+  - name: bolt
+    port: 7687
+    protocol: TCP
+    targetPort: bolt
+  selector:
+    app.kubernetes.io/name: neo4j
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  labels:
+    app.kubernetes.io/name: neo4j
+    app.kubernetes.io/part-of: re8ch-knowledge-graph
+  name: neo4j-browser
+  namespace: re8ch-neo4j
+spec:
+  ingressClassName: advanced-fabric
+  rules:
+  - host: neo4j.re8ch.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: neo4j
+            port:
+              number: 7474
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - neo4j.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-public-neo4j
+  namespace: re8ch-neo4j
+spec:
+  ingress:
+  - ports:
+    - port: 7474
+      protocol: TCP
+    - port: 7687
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: neo4j
+  policyTypes:
+  - Ingress

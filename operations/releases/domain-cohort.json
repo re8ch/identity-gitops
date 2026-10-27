@@ -1,0 +1,251 @@
+{
+  "domain": "identity-access",
+  "sourceObjects": 298,
+  "releases": [
+    {
+      "name": "identity-access-domain-ai-operations",
+      "namespace": "ai-operations",
+      "objects": 1,
+      "contract": "contracts/identity-access-domain-ai-operations.yaml"
+    },
+    {
+      "name": "identity-access-domain-auth",
+      "namespace": "auth",
+      "objects": 12,
+      "contract": "contracts/identity-access-domain-auth.yaml"
+    },
+    {
+      "name": "identity-access-domain-egress-fabric",
+      "namespace": "egress-fabric",
+      "objects": 65,
+      "contract": "contracts/identity-access-domain-egress-fabric.yaml"
+    },
+    {
+      "name": "identity-access-domain-git-workspaces",
+      "namespace": "git-workspaces",
+      "objects": 1,
+      "contract": "contracts/identity-access-domain-git-workspaces.yaml"
+    },
+    {
+      "name": "identity-access-domain-mail-system",
+      "namespace": "mail-system",
+      "objects": 56,
+      "contract": "contracts/identity-access-domain-mail-system.yaml"
+    },
+    {
+      "name": "identity-access-domain-opensandbox-system",
+      "namespace": "opensandbox-system",
+      "objects": 4,
+      "contract": "contracts/identity-access-domain-opensandbox-system.yaml"
+    },
+    {
+      "name": "identity-access-domain-qianwen-ops",
+      "namespace": "qianwen-ops",
+      "objects": 2,
+      "contract": "contracts/identity-access-domain-qianwen-ops.yaml"
+    },
+    {
+      "name": "identity-access-domain-re8ch-anysite",
+      "namespace": "re8ch-anysite",
+      "objects": 5,
+      "contract": "contracts/identity-access-domain-re8ch-anysite.yaml"
+    },
+    {
+      "name": "identity-access-domain-re8ch-dataspace",
+      "namespace": "re8ch-dataspace",
+      "objects": 5,
+      "contract": "contracts/identity-access-domain-re8ch-dataspace.yaml"
+    },
+    {
+      "name": "identity-access-domain-re8ch-ledger",
+      "namespace": "re8ch-ledger",
+      "objects": 11,
+      "contract": "contracts/identity-access-domain-re8ch-ledger.yaml"
+    },
+    {
+      "name": "identity-access-domain-re8ch-neo4j",
+      "namespace": "re8ch-neo4j",
+      "objects": 12,
+      "contract": "contracts/identity-access-domain-re8ch-neo4j.yaml"
+    },
+    {
+      "name": "identity-access-domain-re8ch-secretary",
+      "namespace": "re8ch-secretary",
+      "objects": 22,
+      "contract": "contracts/identity-access-domain-re8ch-secretary.yaml"
+    },
+    {
+      "name": "identity-access-domain-supabase-billing",
+      "namespace": "supabase-billing",
+      "objects": 25,
+      "contract": "contracts/identity-access-domain-supabase-billing.yaml"
+    },
+    {
+      "name": "identity-access-domain-supabase-identity",
+      "namespace": "supabase-identity",
+      "objects": 37,
+      "contract": "contracts/identity-access-domain-supabase-identity.yaml"
+    },
+    {
+      "name": "identity-access-domain-tenant-infrastructure",
+      "namespace": "tenant-infrastructure",
+      "objects": 2,
+      "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
+    }
+  ],
+  "publishableObjects": 260,
+  "deferred": [
+    {
+      "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-anysite/anysite-postgrest",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-anysite/scale-api",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-anysite/scale-worker",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-dataspace/dataspace-gateway",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-ledger/nuclio-ledger-api-gateway",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-ledger/nuclio-ledger-gnucash-report-runner",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-ledger/nuclio-ledger-wechat-auth",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/re8ch-secretary/restate",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-billing/supabase-billing-imgproxy",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-billing/supabase-billing-kong",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-billing/supabase-billing-meta",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-billing/supabase-billing-storage",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-billing/supabase-billing-studio",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-identity/supabase-identity-kong",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-identity/supabase-identity-meta",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/supabase-identity/supabase-identity-studio",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/StatefulSet/re8ch-neo4j/ledger-casegraph",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/StatefulSet/re8ch-neo4j/ledger-economicsgraph",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/StatefulSet/re8ch-neo4j/neo4j",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/CronJob/re8ch-neo4j/ledger-casegraph-backup",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/CronJob/re8ch-neo4j/ledger-economicsgraph-backup",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-identity-broker-groups-v2",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-multi-organization-memberships-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-client-tenant-mcp-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-access-subscription-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-anycam-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-catalog-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-headlamp-v2",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-stalwart-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-tenant-runtime-contexts-v4",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-tenant-runtime-memberships-v1",
+      "reason": "image-digest-required"
+    },
+    {
+      "identity": "core/Secret/auth/ghcr-re8ch",
+      "reason": "secret-provisioning"
+    },
+    {
+      "identity": "core/Secret/auth/re8ch-auth-broker-client",
+      "reason": "secret-provisioning"
+    },
+    {
+      "identity": "core/Secret/mail-system/stalwart-idp-oidc-keys",
+      "reason": "secret-provisioning"
+    },
+    {
+      "identity": "core/Secret/mail-system/stalwart-idp-recovery",
+      "reason": "secret-provisioning"
+    },
+    {
+      "identity": "core/Secret/mail-system/stalwart-recovery-admin",
+      "reason": "secret-provisioning"
+    },
+    {
+      "identity": "core/ServiceAccount/egress-fabric/access-telemetry",
+      "reason": "existing-release-contract"
+    }
+  ]
+}

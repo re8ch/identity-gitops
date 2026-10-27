@@ -1,0 +1,101 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: dataspace-files
+  namespace: re8ch-dataspace
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: cephfs-r640
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataspace-gateway
+  namespace: re8ch-dataspace
+spec:
+  ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+    targetPort: http
+  selector:
+    app: dataspace-gateway
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: storage-collaborator-public
+  namespace: re8ch-dataspace
+spec:
+  hostnames:
+  - storage.re8ch.com
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: storage-https
+  rules:
+  - backendRefs:
+    - group: ''
+      kind: Service
+      name: dataspace-gateway
+      port: 8080
+      weight: 1
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    kustomize.toolkit.fluxcd.io/name: service-backend
+    kustomize.toolkit.fluxcd.io/namespace: flux-system
+    public.re8ch.com/external-dns: enabled
+  name: storage-collaborator
+  namespace: re8ch-dataspace
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: storage.re8ch.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: dataspace-gateway
+            port:
+              number: 8080
+        path: /
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-public-gateway
+  namespace: re8ch-dataspace
+spec:
+  ingress:
+  - ports:
+    - port: 8080
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: dataspace-gateway
+  policyTypes:
+  - Ingress

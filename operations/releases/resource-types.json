@@ -1,0 +1,7 @@
+{
+  "workspace.re8ch.com/AgentSession": "agentsessions",
+  "cert-manager.io/Certificate": "certificates",
+  "gateway.networking.k8s.io/ReferenceGrant": "referencegrants",
+  "gateway.networking.k8s.io/TCPRoute": "tcproutes",
+  "gateway.networking.k8s.io/TLSRoute": "tlsroutes"
+}
