@@ -39,6 +39,7 @@ spec:
     - re8ch-user-center-http-redirect
     - re8ch-user-center-origin-dns
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/Deployment/auth/auth-postgrest
     - core/Service/auth/auth-postgrest

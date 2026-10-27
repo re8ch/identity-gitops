@@ -24,7 +24,6 @@ spec:
     fieldManager: re8ch-release/identity-access-domain-supabase-identity
     resources:
     - apps/Deployment
-    - batch/Job
     - core/ConfigMap
     - core/ResourceQuota
     - core/Service
@@ -64,14 +63,13 @@ spec:
     - supabase-tenant-runtime-contexts-v4
     - supabase-tenant-runtime-memberships-v1
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/Deployment/supabase-identity/identity-avatar-worker
     - apps/Deployment/supabase-identity/supabase-identity-auth
     - apps/Deployment/supabase-identity/supabase-identity-realtime
     - apps/Deployment/supabase-identity/supabase-identity-rest
     - apps/Deployment/supabase-identity/supabase-identity-rest-ro
-    - batch/Job/supabase-identity/supabase-identity-privacy-v1
-    - batch/Job/supabase-identity/supabase-platform-admin-api-v5
     - core/ConfigMap/supabase-identity/supabase-identity-broker-groups-v2
     - core/ConfigMap/supabase-identity/supabase-identity-env
     - core/ConfigMap/supabase-identity/supabase-identity-kong-config
@@ -103,7 +101,7 @@ spec:
     - gateway.networking.k8s.io/ReferenceGrant/supabase-identity/allow-auth-route-to-supabase-auth
     - networking.k8s.io/Ingress/supabase-identity/supabase-identity-studio-dns
   inventory:
-    digest: sha256:fdb21be524583fd1bc967c4918abd8c95a99b91ad25b412ce2b4a946b6789e37
+    digest: sha256:f4ed2e47ec59c3f12794226b0afc87adbedcdceb5723900a38cceeba78b5330b
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300

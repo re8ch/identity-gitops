@@ -27,6 +27,7 @@ spec:
     objectNames:
     - re8ch-owner-pilot-20260825
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - workspace.re8ch.com/AgentSession/ai-operations/re8ch-owner-pilot-20260825
   inventory:

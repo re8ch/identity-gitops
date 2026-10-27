@@ -35,8 +35,8 @@ spec:
     - storage-collaborator
     - storage-collaborator-public
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
-    - core/PersistentVolumeClaim/re8ch-dataspace/dataspace-files
     - core/Service/re8ch-dataspace/dataspace-gateway
     - gateway.networking.k8s.io/HTTPRoute/re8ch-dataspace/storage-collaborator-public
     - networking.k8s.io/Ingress/re8ch-dataspace/storage-collaborator

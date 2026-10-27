@@ -54,6 +54,7 @@ spec:
     - supabase-billing-storage
     - supabase-billing-studio
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/Deployment/supabase-billing/supabase-billing-auth
     - apps/Deployment/supabase-billing/supabase-billing-realtime
@@ -63,7 +64,6 @@ spec:
     - cilium.io/CiliumNetworkPolicy/supabase-billing/supabase-billing-public-edge
     - core/ConfigMap/supabase-billing/supabase-billing-env
     - core/ConfigMap/supabase-billing/supabase-billing-kong-config
-    - core/PersistentVolumeClaim/supabase-billing/supabase-billing-storage
     - core/ResourceQuota/supabase-billing/supabase-billing-quota
     - core/Service/supabase-billing/supabase-billing
     - core/Service/supabase-billing/supabase-billing-auth

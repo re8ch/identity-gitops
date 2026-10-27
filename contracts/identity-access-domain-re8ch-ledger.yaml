@@ -37,6 +37,7 @@ spec:
     - nuclio-ledger-gnucash-report-runner
     - nuclio-ledger-wechat-auth
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - core/ConfigMap/re8ch-ledger/nuclio-ledger-api-gateway
     - core/ConfigMap/re8ch-ledger/nuclio-ledger-gnucash-report-runner

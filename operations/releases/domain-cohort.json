@@ -23,7 +23,7 @@
     {
       "name": "identity-access-domain-mail-system",
       "namespace": "mail-system",
-      "objects": 52,
+      "objects": 45,
       "contract": "contracts/identity-access-domain-mail-system.yaml"
     },
     {
@@ -59,7 +59,7 @@
     {
       "name": "identity-access-domain-re8ch-secretary",
       "namespace": "re8ch-secretary",
-      "objects": 22,
+      "objects": 20,
       "contract": "contracts/identity-access-domain-re8ch-secretary.yaml"
     },
     {
@@ -71,7 +71,7 @@
     {
       "name": "identity-access-domain-supabase-identity",
       "namespace": "supabase-identity",
-      "objects": 37,
+      "objects": 35,
       "contract": "contracts/identity-access-domain-supabase-identity.yaml"
     },
     {
@@ -81,7 +81,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 247,
+  "publishableObjects": 236,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
@@ -172,44 +172,88 @@
       "reason": "image-digest-required"
     },
     {
+      "identity": "batch/Job/mail-system/stalwart-bootstrap-reconciler-v10",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-flk-migration-v2",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-harry-admin-alias-v1",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-idp-bootstrap-v6",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-idp-flk-migration-v2",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-unified-identity-bootstrap-v2",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/mail-system/stalwart-userhub-oauth-v2",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/re8ch-secretary/secretary-channel-registry-v2",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/re8ch-secretary/secretary-register-v0-3-3",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
       "identity": "batch/Job/supabase-identity/supabase-identity-broker-groups-v2",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-identity-privacy-v1",
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-multi-organization-memberships-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-client-tenant-mcp-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-access-subscription-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-anycam-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-catalog-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-headlamp-v2",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-stalwart-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-platform-admin-api-v5",
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-tenant-runtime-contexts-v4",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-tenant-runtime-memberships-v1",
-      "reason": "image-digest-required"
+      "reason": "one-shot-job-platform-owned"
     },
     {
       "identity": "core/Secret/auth/ghcr-re8ch",

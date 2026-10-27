@@ -33,8 +33,8 @@ spec:
     - scale-api
     - scale-cache
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
-    - core/PersistentVolumeClaim/re8ch-anysite/scale-cache
     - core/Service/re8ch-anysite/anysite-postgrest
     - core/Service/re8ch-anysite/scale-api
     - networking.k8s.io/Ingress/re8ch-anysite/scale-api
