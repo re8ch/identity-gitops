@@ -1,0 +1,22 @@
+{
+  "payments": {
+    "previousRepository": "re8ch/service-backend",
+    "previousReleaseId": "main-commerce-billing-payments",
+    "previousAcceptedDigest": "sha256:045d6ab2eb1ab56d35bf5efeac53b923fad04761a3c36fb3aa9fbba7d53d93fe",
+    "previousSourceCommit": "4830d8216742524ebeb3be8bbeb6c4cb8c8b9b28",
+    "fieldManager": "re8ch-release/main-commerce-billing-payments",
+    "sourcePath": "clusters/re8ch/payments-authority-resources.yaml",
+    "sourceDigest": "sha256:1999d19218a00c69530ebd4298037b793f24e11eca734473ad2ae8cb214f1e41",
+    "mode": "authority-only-existing-payload"
+  },
+  "supabase-pg-re8ch": {
+    "previousRepository": "re8ch/service-backend",
+    "previousReleaseId": "main-data-storage-supabase-pg-re8ch",
+    "previousAcceptedDigest": "sha256:652dcc2868039926b9baf59a92927e4e68c7ebf1c2df193332225443c0ee3b15",
+    "previousSourceCommit": "6f3f7e49bbed2896be7f7b7a98f9e23f8c96d26e",
+    "fieldManager": "re8ch-release/main-data-storage-supabase-pg-re8ch",
+    "sourcePath": "clusters/re8ch/supabase-pg-re8ch-authority-resources.yaml",
+    "sourceDigest": "sha256:9214d1dafa06f26087014acc529c62fe825b4628f7a7050ef8586acf6ec9a2cb",
+    "mode": "authority-only-existing-payload"
+  }
+}
