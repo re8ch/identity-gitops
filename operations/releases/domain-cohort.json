@@ -17,19 +17,13 @@
     {
       "name": "identity-access-domain-egress-fabric",
       "namespace": "egress-fabric",
-      "objects": 65,
+      "objects": 59,
       "contract": "contracts/identity-access-domain-egress-fabric.yaml"
-    },
-    {
-      "name": "identity-access-domain-git-workspaces",
-      "namespace": "git-workspaces",
-      "objects": 1,
-      "contract": "contracts/identity-access-domain-git-workspaces.yaml"
     },
     {
       "name": "identity-access-domain-mail-system",
       "namespace": "mail-system",
-      "objects": 56,
+      "objects": 52,
       "contract": "contracts/identity-access-domain-mail-system.yaml"
     },
     {
@@ -37,12 +31,6 @@
       "namespace": "opensandbox-system",
       "objects": 4,
       "contract": "contracts/identity-access-domain-opensandbox-system.yaml"
-    },
-    {
-      "name": "identity-access-domain-qianwen-ops",
-      "namespace": "qianwen-ops",
-      "objects": 2,
-      "contract": "contracts/identity-access-domain-qianwen-ops.yaml"
     },
     {
       "name": "identity-access-domain-re8ch-anysite",
@@ -93,7 +81,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 260,
+  "publishableObjects": 247,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
@@ -246,6 +234,58 @@
     {
       "identity": "core/ServiceAccount/egress-fabric/access-telemetry",
       "reason": "existing-release-contract"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/egress-fabric/access-controller",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/egress-fabric/access-subscription",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/egress-fabric/access-telemetry",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/mail-system/stalwart-cloudflare-token-target",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/mail-system/stalwart-mailbox-provisioner-secrets",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/Role/qianwen-ops/stalwart-cloudflare-token-source",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-controller",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-subscription",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-telemetry",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/git-workspaces/stalwart-mailbox-provisioner",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-cloudflare-token-target",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-mailbox-provisioner-secrets",
+      "reason": "platform-owned-rbac"
+    },
+    {
+      "identity": "rbac.authorization.k8s.io/RoleBinding/qianwen-ops/stalwart-cloudflare-token-source",
+      "reason": "platform-owned-rbac"
     }
   ]
 }

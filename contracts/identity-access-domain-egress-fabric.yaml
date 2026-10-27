@@ -36,8 +36,6 @@ spec:
     - gateway.networking.k8s.io/TLSRoute
     - networking.k8s.io/Ingress
     - policy/PodDisruptionBudget
-    - rbac.authorization.k8s.io/Role
-    - rbac.authorization.k8s.io/RoleBinding
     objectNames:
     - access-adguard
     - access-adguard-data
@@ -64,7 +62,6 @@ spec:
     - access-subscription
     - access-subscription-code-9b5k4f4ddb
     - access-subscription-portal
-    - access-telemetry
     - edge-access-anytls
     - mosdns
     - oauth2-proxy-access-dns
@@ -146,14 +143,8 @@ spec:
     - networking.k8s.io/Ingress/egress-fabric/access-route-expansion-dns
     - policy/PodDisruptionBudget/egress-fabric/access-subscription
     - policy/PodDisruptionBudget/egress-fabric/mosdns
-    - rbac.authorization.k8s.io/Role/egress-fabric/access-controller
-    - rbac.authorization.k8s.io/Role/egress-fabric/access-subscription
-    - rbac.authorization.k8s.io/Role/egress-fabric/access-telemetry
-    - rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-controller
-    - rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-subscription
-    - rbac.authorization.k8s.io/RoleBinding/egress-fabric/access-telemetry
   inventory:
-    digest: sha256:25d922195e8459946c3bcf055efece1ea2e2fa5788774d664f053fd5e25d29af
+    digest: sha256:93583a63b48c2a3d44d9b28f205e5e00a8d606368e6effaf3b21fffa4e6153ae
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300
