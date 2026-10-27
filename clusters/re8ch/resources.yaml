@@ -12163,6 +12163,17 @@ spec:
         app.kubernetes.io/name: stalwart-webmail
     spec:
       automountServiceAccountToken: false
+      # Keep OAuth token exchange and JMAP discovery independent from the
+      # cross-region cluster DNS path. The authoritative mail workload already
+      # uses the same bounded public resolvers on overseas-flk.
+      dnsConfig:
+        nameservers:
+        - 1.1.1.1
+        - 1.0.0.1
+        options:
+        - name: ndots
+          value: '1'
+      dnsPolicy: None
       containers:
       - env:
         - name: HOSTNAME
