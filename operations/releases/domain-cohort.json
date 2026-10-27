@@ -21,12 +21,6 @@
       "contract": "contracts/identity-access-domain-egress-fabric.yaml"
     },
     {
-      "name": "identity-access-domain-mail-system",
-      "namespace": "mail-system",
-      "objects": 45,
-      "contract": "contracts/identity-access-domain-mail-system.yaml"
-    },
-    {
       "name": "identity-access-domain-opensandbox-system",
       "namespace": "opensandbox-system",
       "objects": 4,
@@ -81,11 +75,15 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 236,
+  "publishableObjects": 191,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
       "reason": "image-digest-required"
+    },
+    {
+      "identity": "apps/Deployment/mail-system/stalwart-webmail",
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "apps/Deployment/re8ch-anysite/anysite-postgrest",
@@ -152,6 +150,14 @@
       "reason": "image-digest-required"
     },
     {
+      "identity": "apps/StatefulSet/mail-system/stalwart-flk",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "apps/StatefulSet/mail-system/stalwart-idp-flk",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
       "identity": "apps/StatefulSet/re8ch-neo4j/ledger-casegraph",
       "reason": "image-digest-required"
     },
@@ -164,6 +170,18 @@
       "reason": "image-digest-required"
     },
     {
+      "identity": "batch/CronJob/mail-system/stalwart-cloudflare-token-sync",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "batch/CronJob/mail-system/stalwart-mailbox-provisioner",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "batch/CronJob/mail-system/stalwart-tls-reloader",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
       "identity": "batch/CronJob/re8ch-neo4j/ledger-casegraph-backup",
       "reason": "image-digest-required"
     },
@@ -173,31 +191,31 @@
     },
     {
       "identity": "batch/Job/mail-system/stalwart-bootstrap-reconciler-v10",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-flk-migration-v2",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-harry-admin-alias-v1",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-idp-bootstrap-v6",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-idp-flk-migration-v2",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-unified-identity-bootstrap-v2",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/mail-system/stalwart-userhub-oauth-v2",
-      "reason": "one-shot-job-platform-owned"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "batch/Job/re8ch-secretary/secretary-channel-registry-v2",
@@ -256,6 +274,70 @@
       "reason": "one-shot-job-platform-owned"
     },
     {
+      "identity": "cert-manager.io/Certificate/mail-system/stalwart-mail-re8ch",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-bootstrap-plan",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-bot-access-contract",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-cloudflare-token-sync",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-config",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-harry-admin-alias-v1",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-idp-bootstrap-plan-v6",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-idp-config",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-mailbox-provisioner",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-phonaid-domain-plan",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-unified-identity-bootstrap-plan-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ConfigMap/mail-system/stalwart-userhub-oauth-plan-v1",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/PersistentVolumeClaim/mail-system/stalwart-flk-data",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/PersistentVolumeClaim/mail-system/stalwart-flk-local-data",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/PersistentVolumeClaim/mail-system/stalwart-idp-flk-data",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/PersistentVolumeClaim/mail-system/stalwart-idp-flk-local-data",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
       "identity": "core/Secret/auth/ghcr-re8ch",
       "reason": "secret-provisioning"
     },
@@ -265,19 +347,111 @@
     },
     {
       "identity": "core/Secret/mail-system/stalwart-idp-oidc-keys",
-      "reason": "secret-provisioning"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "core/Secret/mail-system/stalwart-idp-recovery",
-      "reason": "secret-provisioning"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "core/Secret/mail-system/stalwart-recovery-admin",
-      "reason": "secret-provisioning"
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/Service/mail-system/stalwart",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/Service/mail-system/stalwart-direct-mail",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/Service/mail-system/stalwart-headless",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/Service/mail-system/stalwart-idp",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/Service/mail-system/stalwart-webmail",
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "core/ServiceAccount/egress-fabric/access-telemetry",
       "reason": "existing-release-contract"
+    },
+    {
+      "identity": "core/ServiceAccount/mail-system/stalwart-cloudflare-token-sync",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "core/ServiceAccount/mail-system/stalwart-mailbox-provisioner",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-admin-public",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-admin-redirect",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-collaboration-public",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-collaboration-redirect",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-idp-public",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-idp-redirect",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-webmail-public",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/HTTPRoute/mail-system/stalwart-webmail-redirect",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/TCPRoute/mail-system/stalwart-imaps-public-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/TCPRoute/mail-system/stalwart-sieve-public-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/TCPRoute/mail-system/stalwart-smtp-public-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/TCPRoute/mail-system/stalwart-smtps-public-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "gateway.networking.k8s.io/TCPRoute/mail-system/stalwart-submission-public-v2",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "networking.k8s.io/Ingress/mail-system/stalwart-collaboration-public-dns",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "networking.k8s.io/Ingress/mail-system/stalwart-idp-public-dns",
+      "reason": "transferred-to-agent-runtime"
+    },
+    {
+      "identity": "networking.k8s.io/Ingress/mail-system/stalwart-webmail-public",
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "rbac.authorization.k8s.io/Role/egress-fabric/access-controller",
@@ -293,11 +467,11 @@
     },
     {
       "identity": "rbac.authorization.k8s.io/Role/mail-system/stalwart-cloudflare-token-target",
-      "reason": "platform-owned-rbac"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "rbac.authorization.k8s.io/Role/mail-system/stalwart-mailbox-provisioner-secrets",
-      "reason": "platform-owned-rbac"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "rbac.authorization.k8s.io/Role/qianwen-ops/stalwart-cloudflare-token-source",
@@ -321,11 +495,11 @@
     },
     {
       "identity": "rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-cloudflare-token-target",
-      "reason": "platform-owned-rbac"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-mailbox-provisioner-secrets",
-      "reason": "platform-owned-rbac"
+      "reason": "transferred-to-agent-runtime"
     },
     {
       "identity": "rbac.authorization.k8s.io/RoleBinding/qianwen-ops/stalwart-cloudflare-token-source",

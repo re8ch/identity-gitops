@@ -1,0 +1,7 @@
+{
+  "mail-system": {
+    "repository": "8iops/agent-gitops",
+    "releaseId": "agent-runtime-domain-mail-system",
+    "previousAcceptedDigest": "sha256:2263be4fbb13ea0c20493ff88acd91688216e432d23b566c228908f8bf02de5d"
+  }
+}

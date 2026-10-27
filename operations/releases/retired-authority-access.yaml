@@ -1,0 +1,129 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: identity-access-domain-mail-system
+  namespace: mail-system
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  resourceNames:
+  - stalwart-webmail
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  resourceNames:
+  - stalwart-flk
+  - stalwart-idp-flk
+  verbs:
+  - get
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  resourceNames:
+  - stalwart-cloudflare-token-sync
+  - stalwart-mailbox-provisioner
+  - stalwart-tls-reloader
+  verbs:
+  - get
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  resourceNames:
+  - stalwart-mail-re8ch
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  resourceNames:
+  - ssa-state-identity-access-domain-mail-system
+  - stalwart-bootstrap-plan
+  - stalwart-bot-access-contract
+  - stalwart-cloudflare-token-sync
+  - stalwart-config
+  - stalwart-harry-admin-alias-v1
+  - stalwart-idp-bootstrap-plan-v6
+  - stalwart-idp-config
+  - stalwart-mailbox-provisioner
+  - stalwart-phonaid-domain-plan
+  - stalwart-unified-identity-bootstrap-plan-v2
+  - stalwart-userhub-oauth-plan-v1
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - persistentvolumeclaims
+  resourceNames:
+  - stalwart-flk-data
+  - stalwart-flk-local-data
+  - stalwart-idp-flk-data
+  - stalwart-idp-flk-local-data
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - serviceaccounts
+  resourceNames:
+  - stalwart-cloudflare-token-sync
+  - stalwart-mailbox-provisioner
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - services
+  resourceNames:
+  - stalwart
+  - stalwart-direct-mail
+  - stalwart-headless
+  - stalwart-idp
+  - stalwart-webmail
+  verbs:
+  - get
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproutes
+  resourceNames:
+  - stalwart-admin-public
+  - stalwart-admin-redirect
+  - stalwart-collaboration-public
+  - stalwart-collaboration-redirect
+  - stalwart-idp-public
+  - stalwart-idp-redirect
+  - stalwart-webmail-public
+  - stalwart-webmail-redirect
+  verbs:
+  - get
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - tcproutes
+  resourceNames:
+  - stalwart-imaps-public-v2
+  - stalwart-sieve-public-v2
+  - stalwart-smtp-public-v2
+  - stalwart-smtps-public-v2
+  - stalwart-submission-public-v2
+  verbs:
+  - get
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  resourceNames:
+  - stalwart-collaboration-public-dns
+  - stalwart-idp-public-dns
+  - stalwart-webmail-public
+  verbs:
+  - get
