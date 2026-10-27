@@ -52,6 +52,8 @@ def validate_contract(path: Path) -> dict[str, str]:
     if source.get("renderer") != "kustomize" or source.get("revision") != "github-main-reviewed":
         raise ValueError("identity canary must use the reviewed static Kustomize source")
     return {
+        "release-id": contract["metadata"]["name"],
+        "namespace": spec["target"]["namespace"],
         "domain": "identity-access",
         "environment": ENVIRONMENT,
         "audience": AUDIENCE,
