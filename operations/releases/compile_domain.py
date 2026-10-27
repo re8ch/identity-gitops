@@ -19,6 +19,7 @@ DOMAIN = ENVIRONMENT.removeprefix('release-executor-')
 PREFIX = ('observability' if DOMAIN == 'observability-metering' else DOMAIN) + '-domain-'
 PLURALS = {'ServiceAccount':'serviceaccounts','Service':'services','ConfigMap':'configmaps','PersistentVolumeClaim':'persistentvolumeclaims','Deployment':'deployments','StatefulSet':'statefulsets','DaemonSet':'daemonsets','Job':'jobs','CronJob':'cronjobs','HorizontalPodAutoscaler':'horizontalpodautoscalers','PodDisruptionBudget':'poddisruptionbudgets','NetworkPolicy':'networkpolicies','Ingress':'ingresses','EndpointSlice':'endpointslices','HTTPRoute':'httproutes','CiliumNetworkPolicy':'ciliumnetworkpolicies','Role':'roles','RoleBinding':'rolebindings','MCPServer':'mcpservers','ResourceQuota':'resourcequotas'}
 CUSTOM_TYPES = json.loads((ROOT/'operations/releases/resource-types.json').read_text())
+TRANSFERRED = json.loads((ROOT/'operations/releases/transferred-authorities.json').read_text())
 FLUX_GROUPS = {'source.toolkit.fluxcd.io','helm.toolkit.fluxcd.io','kustomize.toolkit.fluxcd.io','notification.toolkit.fluxcd.io','image.toolkit.fluxcd.io'}
 
 def group(item):
@@ -40,6 +41,7 @@ def release_name(namespace):
 
 def classify(item,reserved):
     ident=object_identity(item)
+    if item['metadata'].get('namespace') in TRANSFERRED:return 'transferred-to-agent-runtime'
     if ident in reserved:return 'existing-release-contract'
     if group(item)=='rbac.authorization.k8s.io':return 'platform-owned-rbac'
     if item['kind']=='Job':return 'one-shot-job-platform-owned'
@@ -95,7 +97,11 @@ def compile_outputs():
           {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':{'name':name,'namespace':namespace},'rules':role_rules},
           {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'RoleBinding','metadata':{'name':name,'namespace':namespace},'roleRef':{'apiGroup':'rbac.authorization.k8s.io','kind':'Role','name':name},'subjects':[{'apiGroup':'rbac.authorization.k8s.io','kind':'Group','name':GROUP}]}]
         releases.append({'name':name,'namespace':namespace,'objects':len(objects),'contract':'contracts/'+name+'.yaml'})
-    files[ROOT/'operations/releases/domain-access.yaml']=yaml.safe_dump_all(access,sort_keys=False,explicit_start=True)
+    retired=list(yaml.safe_load_all((ROOT/'operations/releases/retired-authority-access.yaml').read_text()))
+    for role in retired:
+        if role['kind'] != 'Role' or role['metadata']['namespace'] not in TRANSFERRED or any(rule['verbs'] != ['get'] for rule in role['rules']):
+            raise ValueError('retired authority must retain audit-only access')
+    files[ROOT/'operations/releases/domain-access.yaml']=yaml.safe_dump_all(access+retired,sort_keys=False,explicit_start=True)
     files[ROOT/'operations/releases/domain-cohort.json']=json.dumps({'domain':DOMAIN,'sourceObjects':len(items),'releases':releases,'publishableObjects':sum(len(v) for v in by_namespace.values()),'deferred':sorted(deferred,key=lambda x:x['identity'])},indent=2)+'\n'
     return files
 
