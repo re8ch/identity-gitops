@@ -1,0 +1,46 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-tenant-infrastructure
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: tenant-infrastructure
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-tenant-infrastructure
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-tenant-infrastructure
+    resources:
+    - gateway.networking.k8s.io/ReferenceGrant
+    - networking.k8s.io/NetworkPolicy
+    objectNames:
+    - allow-db-rw-auth-route-to-tenant-api
+    - identity-dependency-preflight
+    allowClusterScoped: false
+    forceConflictObjects:
+    - gateway.networking.k8s.io/ReferenceGrant/tenant-infrastructure/allow-db-rw-auth-route-to-tenant-api
+    - networking.k8s.io/NetworkPolicy/tenant-infrastructure/identity-dependency-preflight
+  inventory:
+    digest: sha256:b2f232993c717b25adce253911510a3ae749fae53524b5360aeec5f71785ed5b
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

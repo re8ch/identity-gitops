@@ -1,0 +1,3261 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: edge-access-anytls
+  namespace: egress-fabric
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge-access-anytls
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: public-ingress
+        app.kubernetes.io/name: edge-access-anytls
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - -d
+        - /etc/mihomo
+        image: docker.io/metacubex/mihomo:v1.19.29@sha256:e1d7dadaa9368a52d420d65007e0e0d87cb148d292faa67326eda3fef5757f59
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: anytls
+        name: mihomo
+        ports:
+        - containerPort: 24443
+          name: anytls
+          protocol: TCP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: anytls
+        resources:
+          limits:
+            cpu: 800m
+            memory: 512Mi
+          requests:
+            cpu: 25m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/mihomo/config.yaml
+          name: work
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /etc/mihomo/tls
+          name: tls
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - 'awk ''/^__ANYTLS_USERS__$/{while((getline line < "/credentials/users.yaml")>0)
+          print line; close("/credentials/users.yaml"); next} {print}'' /base/config.yaml
+          > /work/config.yaml
+
+          '
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: render-users
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /base
+          name: base
+          readOnly: true
+        - mountPath: /credentials
+          name: credentials
+          readOnly: true
+        - mountPath: /work
+          name: work
+      nodeSelector:
+        networking.re8ch.com/edge-access-anytls: enabled
+      priorityClassName: system-node-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+      - operator: Exists
+      volumes:
+      - configMap:
+          name: edge-access-anytls
+        name: base
+      - name: credentials
+        secret:
+          secretName: personal-access-users
+      - name: tls
+        secret:
+          secretName: access-re8ch-com-tls
+      - emptyDir: {}
+        name: work
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: access-adguard
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-adguard
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        access.re8ch.com/config-revision: 20260827-1
+      labels:
+        app.kubernetes.io/name: access-adguard
+        app.kubernetes.io/part-of: access-dns
+        scheduling.re8ch.com/control-plane-allowed: 'true'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - --no-check-update
+        - -c
+        - /opt/adguardhome/conf/AdGuardHome.yaml
+        - -w
+        - /opt/adguardhome/work
+        image: docker.io/adguard/adguardhome:v0.107.76@sha256:904e081ea2d67fc6440696960eac009c0f649a5eabf44da409dfc36c8b3304c9
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: dns-tcp
+        name: adguard
+        ports:
+        - containerPort: 5353
+          name: dns-udp
+          protocol: UDP
+        - containerPort: 5353
+          name: dns-tcp
+          protocol: TCP
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: dns-tcp
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /opt/adguardhome/work
+          name: data
+          subPath: work
+        - mountPath: /opt/adguardhome/conf
+          name: data
+          subPath: conf
+      initContainers:
+      - args:
+        - "import socket, time\ntarget = (\"mosdns.egress-fabric.svc.cluster.local\"\
+          , 5353)\nfor attempt in range(60):\n    try:\n        socket.create_connection(target,\
+          \ 2).close()\n        break\n    except OSError:\n        if attempt ==\
+          \ 59:\n            raise\n        time.sleep(2)\n"
+        command:
+        - python
+        - -c
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: wait-mosdns
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      - args:
+        - from pathlib import Path; (Path('/data/work')).mkdir(parents=True,exist_ok=True);
+          (Path('/data/conf')).mkdir(parents=True,exist_ok=True); Path('/data/conf/AdGuardHome.yaml').write_bytes(Path('/template/AdGuardHome.yaml').read_bytes())
+        command:
+        - python
+        - -c
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: initialize
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /data
+          name: data
+        - mountPath: /template
+          name: config
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      priorityClassName: system-cluster-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: access-adguard-data
+      - configMap:
+          name: access-dns-config
+        name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: access-controller
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-controller
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        access.re8ch.com/code-revision: 20261003-gotrue-github-id-1
+      labels:
+        app.kubernetes.io/component: authorization
+        app.kubernetes.io/name: access-controller
+    spec:
+      containers:
+      - command:
+        - python
+        - /app/controller.py
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: GITHUB_REPOSITORY
+          value: re8ch/access-edge-members
+        - name: GITHUB_APP_ID
+          valueFrom:
+            secretKeyRef:
+              key: app-id
+              name: access-github-app
+        - name: GITHUB_INSTALLATION_ID
+          valueFrom:
+            secretKeyRef:
+              key: installation-id
+              name: access-github-app
+        - name: IDENTITY_ALIASES_JSON
+          value: '{"harry@re8ch.com":"hliu74","hliu74@apple.com":"hliu74","admin@re8ch.com":"hliu74","woomou":"hliu74","Cgg2MTY5MDcxORIGZ2l0aHVi":"hliu74"}'
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: controller
+        resources:
+          limits:
+            cpu: 300m
+            memory: 128Mi
+          requests:
+            cpu: 20m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /app
+          name: code
+          readOnly: true
+        - mountPath: /secrets
+          name: hmac
+          readOnly: true
+        - mountPath: /github-app
+          name: github-app
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-controller
+      volumes:
+      - configMap:
+          name: access-subscription-code-9b5k4f4ddb
+        name: code
+      - name: hmac
+        secret:
+          secretName: access-subscription-secrets
+      - name: github-app
+        secret:
+          items:
+          - key: private-key.pem
+            path: private-key.pem
+          secretName: access-github-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: access-rule-sync
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-rule-sync
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: rules
+        app.kubernetes.io/name: access-rule-sync
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - while true; do python /app/rule_sync.py || true; sleep 86400; done
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: sync
+        resources:
+          limits:
+            cpu: 500m
+            memory: 192Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /app
+          name: code
+          readOnly: true
+        - mountPath: /rules
+          name: rules
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - configMap:
+          name: access-subscription-code-9b5k4f4ddb
+        name: code
+      - name: rules
+        persistentVolumeClaim:
+          claimName: access-rule-cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-subscription
+  template:
+    metadata:
+      annotations:
+        access.re8ch.com/code-revision: 20261003-gotrue-auth-host-1
+      labels:
+        app.kubernetes.io/component: portal
+        app.kubernetes.io/name: access-subscription
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: access-subscription
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      containers:
+      - command:
+        - python
+        - /app/app.py
+        env:
+        - name: HTTP_PORT
+          value: '18081'
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: RULES_ROOT
+          value: /rules
+        - name: IDENTITY_ALIASES_JSON
+          value: '{"harry@re8ch.com":"hliu74","hliu74@apple.com":"hliu74","admin@re8ch.com":"hliu74","woomou":"hliu74","Cgg2MTY5MDcxORIGZ2l0aHVi":"hliu74"}'
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 15
+        name: portal
+        ports:
+        - containerPort: 18081
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 192Mi
+          requests:
+            cpu: 25m
+            memory: 48Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /app
+          name: code
+          readOnly: true
+        - mountPath: /secrets
+          name: hmac
+          readOnly: true
+        - mountPath: /rules
+          name: rules
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-subscription
+      volumes:
+      - configMap:
+          name: access-subscription-code-9b5k4f4ddb
+        name: code
+      - name: hmac
+        secret:
+          secretName: access-subscription-secrets
+      - name: rules
+        persistentVolumeClaim:
+          claimName: access-rule-cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosdns
+  namespace: egress-fabric
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mosdns
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mosdns
+        app.kubernetes.io/part-of: access-dns
+        scheduling.re8ch.com/control-plane-allowed: 'true'
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - r640
+            weight: 100
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - r640
+                - a1-wsl-zt
+                - b1-wsl-zt
+                - amdwsl-zt
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: mosdns
+            topologyKey: kubernetes.io/hostname
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - start
+        - -c
+        - /etc/mosdns/config.yaml
+        command:
+        - /usr/bin/mosdns
+        image: docker.io/irinesistiana/mosdns:v5.3.4@sha256:27e62602195489061e6282b8b5028c70a9b00a1f06fc1604f99ce229072e9908
+        name: mosdns
+        ports:
+        - containerPort: 5353
+          name: dns-udp
+          protocol: UDP
+        - containerPort: 5353
+          name: dns-tcp
+          protocol: TCP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: dns-tcp
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 20m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/mosdns/config.yaml
+          name: config
+          readOnly: true
+          subPath: mosdns.yaml
+        - mountPath: /rules
+          name: rules
+          readOnly: true
+        - mountPath: /etc/mosdns/cache
+          name: cache
+      nodeSelector:
+        networking.re8ch.com/mihomo-node: enabled
+      priorityClassName: system-cluster-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      volumes:
+      - configMap:
+          name: access-dns-config
+        name: config
+      - name: rules
+        persistentVolumeClaim:
+          claimName: access-rule-cache
+      - emptyDir: {}
+        name: cache
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy-access-dns
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy-access-dns
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oauth2-proxy-access-dns
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - --provider=oidc
+        - --oidc-issuer-url=https://dex.service.re8ch.com
+        - --redirect-url=https://dns.access.re8ch.com/oauth2/callback
+        - --upstream=http://access-dns-admin:3000
+        - --http-address=0.0.0.0:4180
+        - --email-domain=*
+        - --scope=openid profile email
+        - --cookie-secure=true
+        - --cookie-samesite=lax
+        - --reverse-proxy=true
+        - --skip-provider-button=true
+        envFrom:
+        - secretRef:
+            name: oauth2-proxy-access-dns
+        image: quay.io/oauth2-proxy/oauth2-proxy:v7.9.0@sha256:37c1570c0427e02fc7c947ef2c04e8995b8347b7abc9fcf1dbb4e376a4b221a7
+        name: oauth2-proxy
+        ports:
+        - containerPort: 4180
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 200m
+            memory: 96Mi
+          requests:
+            cpu: 10m
+            memory: 24Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: personal-access-cn-loudi
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      access.re8ch.com/region: cn-loudi
+      app.kubernetes.io/name: personal-access
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        access.re8ch.com/region: cn-loudi
+        app.kubernetes.io/component: public-ingress
+        app.kubernetes.io/name: personal-access
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - -d
+        - /etc/mihomo
+        image: docker.io/metacubex/mihomo:v1.19.29@sha256:e1d7dadaa9368a52d420d65007e0e0d87cb148d292faa67326eda3fef5757f59
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: anytls
+        name: mihomo
+        ports:
+        - containerPort: 25443
+          name: anytls
+          protocol: TCP
+        - containerPort: 25444
+          name: hysteria2
+          protocol: UDP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: anytls
+        resources:
+          limits:
+            cpu: '2'
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/mihomo/config.yaml
+          name: work
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /etc/mihomo/tls
+          name: tls
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - 'awk ''/^__ANYTLS_USERS__$|^__HYSTERIA2_USERS__$/{while((getline line <
+          "/credentials/users.yaml")>0) print line; close("/credentials/users.yaml");
+          next} {print}'' /base/config.yaml | sed -e "s/__CONTROLLER_SECRET__/$(cat
+          /controller/secret)/" -e ''s/port: 24443/port: 25443/'' -e ''s/port: 24444/port:
+          25444/'' > /work/config.yaml'
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: render-users
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /base
+          name: base
+          readOnly: true
+        - mountPath: /credentials
+          name: credentials
+          readOnly: true
+        - mountPath: /work
+          name: work
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      priorityClassName: system-node-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-telemetry
+      tolerations:
+      - operator: Exists
+      volumes:
+      - configMap:
+          name: personal-access-mihomo
+        name: base
+      - name: credentials
+        secret:
+          secretName: personal-access-users
+      - name: tls
+        secret:
+          secretName: access-re8ch-com-tls
+      - emptyDir: {}
+        name: work
+      - name: controller
+        secret:
+          items:
+          - key: controller-secret
+            path: secret
+          secretName: access-controller-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: personal-access-my-kul
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      access.re8ch.com/region: my-kul
+      app.kubernetes.io/name: personal-access
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        access.re8ch.com/region: my-kul
+        app.kubernetes.io/component: public-ingress
+        app.kubernetes.io/name: personal-access
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - -d
+        - /etc/mihomo
+        image: docker.io/metacubex/mihomo:v1.19.29@sha256:e1d7dadaa9368a52d420d65007e0e0d87cb148d292faa67326eda3fef5757f59
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: anytls
+        name: mihomo
+        ports:
+        - containerPort: 24443
+          name: anytls
+          protocol: TCP
+        - containerPort: 24444
+          name: hysteria2
+          protocol: UDP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: anytls
+        resources:
+          limits:
+            cpu: '2'
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/mihomo/config.yaml
+          name: work
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /etc/mihomo/tls
+          name: tls
+          readOnly: true
+      - command:
+        - python
+        - /app/telemetry.py
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ACCESS_REGION
+          value: my-kul
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: telemetry
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 24Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /app
+          name: app-code
+          readOnly: true
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - 'awk ''/^__ANYTLS_USERS__$|^__HYSTERIA2_USERS__$/{while((getline line <
+          "/credentials/users.yaml")>0) print line; close("/credentials/users.yaml");
+          next} {print}'' /base/config.yaml | sed "s/__CONTROLLER_SECRET__/$(cat /controller/secret)/"
+          > /work/config.yaml
+
+          '
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: render-users
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /base
+          name: base
+          readOnly: true
+        - mountPath: /credentials
+          name: credentials
+          readOnly: true
+        - mountPath: /work
+          name: work
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: overseas-kl
+      priorityClassName: system-node-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-telemetry
+      tolerations:
+      - operator: Exists
+      volumes:
+      - configMap:
+          name: personal-access-mihomo
+        name: base
+      - name: credentials
+        secret:
+          secretName: personal-access-users
+      - name: tls
+        secret:
+          secretName: access-re8ch-com-tls
+      - emptyDir: {}
+        name: work
+      - configMap:
+          name: access-subscription-code-9b5k4f4ddb
+        name: app-code
+      - name: controller
+        secret:
+          items:
+          - key: controller-secret
+            path: secret
+          secretName: access-controller-api
+      - name: kube-api-access
+        projected:
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3600
+              path: token
+          - configMap:
+              items:
+              - key: ca.crt
+                path: ca.crt
+              name: kube-root-ca.crt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: personal-access-us-ca
+  namespace: egress-fabric
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      access.re8ch.com/region: us-ca
+      app.kubernetes.io/name: personal-access
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        access.re8ch.com/tls-san-revision: 20260829-direct-ca-1
+      labels:
+        access.re8ch.com/region: us-ca
+        app.kubernetes.io/component: public-ingress
+        app.kubernetes.io/name: personal-access
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - -d
+        - /etc/mihomo
+        image: docker.io/metacubex/mihomo:v1.19.29@sha256:e1d7dadaa9368a52d420d65007e0e0d87cb148d292faa67326eda3fef5757f59
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: anytls
+        name: mihomo
+        ports:
+        - containerPort: 24443
+          name: anytls
+          protocol: TCP
+        - containerPort: 24444
+          name: hysteria2
+          protocol: UDP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: anytls
+        resources:
+          limits:
+            cpu: '2'
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/mihomo/config.yaml
+          name: work
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /etc/mihomo/tls
+          name: tls
+          readOnly: true
+      - command:
+        - python
+        - /app/telemetry.py
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: ACCESS_REGION
+          value: us-ca
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: telemetry
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 10m
+            memory: 24Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /app
+          name: app-code
+          readOnly: true
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - 'awk ''/^__ANYTLS_USERS__$|^__HYSTERIA2_USERS__$/{while((getline line <
+          "/credentials/users.yaml")>0) print line; close("/credentials/users.yaml");
+          next} {print}'' /base/config.yaml | sed "s/__CONTROLLER_SECRET__/$(cat /controller/secret)/"
+          > /work/config.yaml
+
+          '
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: render-users
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /base
+          name: base
+          readOnly: true
+        - mountPath: /credentials
+          name: credentials
+          readOnly: true
+        - mountPath: /work
+          name: work
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: overseas-edge-50
+      priorityClassName: system-node-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-telemetry
+      tolerations:
+      - operator: Exists
+      volumes:
+      - configMap:
+          name: personal-access-mihomo
+        name: base
+      - name: credentials
+        secret:
+          secretName: personal-access-users
+      - name: tls
+        secret:
+          secretName: access-re8ch-com-tls
+      - emptyDir: {}
+        name: work
+      - configMap:
+          name: access-subscription-code-9b5k4f4ddb
+        name: app-code
+      - name: controller
+        secret:
+          items:
+          - key: controller-secret
+            path: secret
+          secretName: access-controller-api
+      - name: kube-api-access
+        projected:
+          sources:
+          - serviceAccountToken:
+              expirationSeconds: 3600
+              path: token
+          - configMap:
+              items:
+              - key: ca.crt
+                path: ca.crt
+              name: kube-root-ca.crt
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: personal-access-us-la
+  namespace: egress-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      access.re8ch.com/region: us-la
+      app.kubernetes.io/name: personal-access
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        access.re8ch.com/region: us-la
+        app.kubernetes.io/component: public-ingress
+        app.kubernetes.io/name: personal-access
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - -d
+        - /etc/mihomo
+        image: docker.io/metacubex/mihomo:v1.19.29@sha256:e1d7dadaa9368a52d420d65007e0e0d87cb148d292faa67326eda3fef5757f59
+        livenessProbe:
+          periodSeconds: 15
+          tcpSocket:
+            port: anytls
+        name: mihomo
+        ports:
+        - containerPort: 24443
+          name: anytls
+          protocol: TCP
+        - containerPort: 24444
+          name: hysteria2
+          protocol: UDP
+        readinessProbe:
+          periodSeconds: 5
+          tcpSocket:
+            port: anytls
+        resources:
+          limits:
+            cpu: '2'
+            memory: 1Gi
+          requests:
+            cpu: 50m
+            memory: 96Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /etc/mihomo/config.yaml
+          name: work
+          readOnly: true
+          subPath: config.yaml
+        - mountPath: /etc/mihomo/tls
+          name: tls
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - awk '/^__ANYTLS_USERS__$|^__HYSTERIA2_USERS__$/{while((getline line < "/credentials/users.yaml")>0)
+          print line; close("/credentials/users.yaml"); next} {print}' /base/config.yaml
+          | sed "s/__CONTROLLER_SECRET__/$(cat /controller/secret)/" > /work/config.yaml
+        command:
+        - /bin/sh
+        - -ec
+        image: python:3.12-alpine@sha256:d09d15e60962ca365d1cd544a48773bac9d33f2fb1b00f2aa0deec78ade7dc31
+        name: render-users
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /base
+          name: base
+          readOnly: true
+        - mountPath: /credentials
+          name: credentials
+          readOnly: true
+        - mountPath: /work
+          name: work
+        - mountPath: /controller
+          name: controller
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: overseas-la
+      priorityClassName: system-node-critical
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: access-telemetry
+      tolerations:
+      - operator: Exists
+      volumes:
+      - configMap:
+          name: personal-access-mihomo
+        name: base
+      - name: credentials
+        secret:
+          secretName: personal-access-users
+      - name: tls
+        secret:
+          secretName: access-re8ch-com-tls
+      - emptyDir: {}
+        name: work
+      - name: controller
+        secret:
+          items:
+          - key: controller-secret
+            path: secret
+          secretName: access-controller-api
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: access-re8ch-com
+  namespace: egress-fabric
+spec:
+  dnsNames:
+  - access.re8ch.com
+  - us-ca.access.re8ch.com
+  - my-kul.access.re8ch.com
+  - backup.access.re8ch.com
+  - route-la.access.re8ch.com
+  - route-kl.access.re8ch.com
+  - direct-la.access.re8ch.com
+  - direct-ca.access.re8ch.com
+  - direct-kl.access.re8ch.com
+  - direct-cn.access.re8ch.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: re8ch-cloudflare-dns01
+  secretName: access-re8ch-com-tls
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: access-dns
+  namespace: egress-fabric
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: access-adguard
+  ingress:
+  - fromCIDR:
+    - 192.168.88.0/24
+    - 10.42.0.0/16
+    toPorts:
+    - ports:
+      - port: '5353'
+        protocol: UDP
+      - port: '5353'
+        protocol: TCP
+  - fromEntities:
+    - cluster
+    toPorts:
+    - ports:
+      - port: '5353'
+        protocol: UDP
+      - port: '5353'
+        protocol: TCP
+  - fromEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: oauth2-proxy-access-dns
+    toPorts:
+    - ports:
+      - port: '3000'
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: access-dns-gateway
+  namespace: egress-fabric
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy-access-dns
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '4180'
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: access-mosdns
+  namespace: egress-fabric
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mosdns
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        app.kubernetes.io/name: access-adguard
+    toPorts:
+    - ports:
+      - port: '5353'
+        protocol: UDP
+      - port: '5353'
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: access-subscription-portal
+  namespace: egress-fabric
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: access-subscription
+  ingress:
+  - fromEntities:
+    - ingress
+    toPorts:
+    - ports:
+      - port: '18081'
+        protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: personal-access-public-ingress
+  namespace: egress-fabric
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: personal-access
+  ingress:
+  - fromEntities:
+    - ingress
+    - world
+    toPorts:
+    - ports:
+      - port: '24443'
+        protocol: TCP
+      - port: '24444'
+        protocol: UDP
+---
+apiVersion: v1
+data:
+  AdGuardHome.yaml: "http:\n  address: 0.0.0.0:3000\n  session_ttl: 720h\nusers: []\n\
+    auth_attempts: 5\nblock_auth_min: 15\ndns:\n  bind_hosts: [0.0.0.0]\n  port: 5353\n\
+    \  ratelimit: 200\n  refuse_any: true\n  # AdGuard's upstream bootstrap resolver\
+    \ cannot resolve cluster.local.\n  # This Service IP is explicitly reserved below\
+    \ and verified by GitOps.\n  upstream_dns: [10.43.66.51:5353]\n  bootstrap_dns:\
+    \ [223.5.5.5, 119.29.29.29]\n  cache_size: 4194304\n  cache_ttl_min: 60\n  cache_ttl_max:\
+    \ 86400\nfiltering:\n  filtering_enabled: true\n  filters_update_interval: 24\n\
+    filters:\n  - enabled: true\n    url: https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt\n\
+    \    name: AdGuard DNS filter\n    id: 1\nquerylog:\n  enabled: true\n  file_enabled:\
+    \ true\n  interval: 24h\n  size_memory: 1000\n  anonymize_client_ip: false\nstatistics:\
+    \ {enabled: true, interval: 24h}\nschema_version: 30\n"
+  mosdns.yaml: "log: {level: info, production: true}\nplugins:\n  - tag: cache\n \
+    \   type: cache\n    args: {size: 65536, lazy_cache_ttl: 86400}\n  - tag: private_domains\n\
+    \    type: domain_set\n    args: {files: [/rules/current/private-domains.txt]}\n\
+    \  - tag: cn_domains\n    type: domain_set\n    args: {files: [/rules/current/cn-domains.txt]}\n\
+    \  - tag: forward_cn\n    type: forward\n    args:\n      concurrent: 2\n    \
+    \  upstreams:\n        - {addr: https://dns.alidns.com/dns-query, dial_addr: 223.5.5.5}\n\
+    \        - {addr: https://doh.pub/dns-query, dial_addr: 119.29.29.29}\n  - tag:\
+    \ forward_global\n    type: forward\n    args:\n      concurrent: 2\n      upstreams:\n\
+    \        - {addr: https://1.1.1.1/dns-query, socks5: mihomos-node-cn-local:17891}\n\
+    \        - {addr: https://dns.google/dns-query, dial_addr: 8.8.8.8, socks5: mihomos-node-cn-local:17891}\n\
+    \  - tag: main_sequence\n    type: sequence\n    args:\n      - exec: $cache\n\
+    \      - matches: has_resp\n        exec: accept\n      - matches: qname $private_domains\
+    \ $cn_domains\n        exec: $forward_cn\n      - matches: has_resp\n        exec:\
+    \ accept\n      - exec: $forward_global\n      - exec: $cache\n  - tag: udp_server\n\
+    \    type: udp_server\n    args: {entry: main_sequence, listen: 0.0.0.0:5353}\n\
+    \  - tag: tcp_server\n    type: tcp_server\n    args: {entry: main_sequence, listen:\
+    \ 0.0.0.0:5353}\n"
+kind: ConfigMap
+metadata:
+  name: access-dns-config
+  namespace: egress-fabric
+---
+apiVersion: v1
+data:
+  app.py: "#!/usr/bin/env python3\n\"\"\"Auth Gateway-fronted Store, admin API and\
+    \ device-scoped subscription service.\"\"\"\n\nfrom __future__ import annotations\n\
+    \nimport hashlib\nimport hmac\nimport ipaddress\nimport json\nimport mimetypes\n\
+    import os\nimport secrets\nimport socket\nimport ssl\nimport time\nimport urllib.error\n\
+    import urllib.request\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\n\
+    from pathlib import Path\nfrom urllib.parse import parse_qs, quote, urlencode,\
+    \ urlparse\n\nfrom core import (DEFAULT_NODES, Node, Publication, RuntimeTarget,\
+    \ authorization, canonical_subject, clash_meta_import_url, issue_token, mihomo_config,\
+    \ proxy_password,\n                  public_node, shadowrocket_config, shadowrocket_import_url,\
+    \ SHADOWROCKET_PROFILE_REVISION, subscription_body,\n                  subscription_headers,\
+    \ v2box_subscription_body, v2box_subscription_import_url, verify_token)\n\nNAMESPACE\
+    \ = os.getenv(\"POD_NAMESPACE\", \"egress-fabric\")\nSTATE_NAME = os.getenv(\"\
+    STATE_CONFIGMAP\", \"access-subscription-devices\")\nAUTH_NAME = os.getenv(\"\
+    AUTH_CONFIGMAP\", \"access-members-cache\")\nUSAGE_NAME = os.getenv(\"USAGE_CONFIGMAP\"\
+    , \"access-device-usage\")\nRULES_ROOT = Path(os.getenv(\"RULES_ROOT\", \"/rules\"\
+    ))\nBASE_URL = os.getenv(\"PUBLIC_BASE_URL\", \"https://sub.access.re8ch.com\"\
+    ).rstrip(\"/\")\nHMAC_SECRET = Path(os.getenv(\"HMAC_SECRET_PATH\", \"/secrets/hmac-key\"\
+    )).read_bytes().strip()\nIDENTITY_ALIASES = json.loads(os.getenv(\"IDENTITY_ALIASES_JSON\"\
+    , \"{}\"))\nOAUTH_ISSUER = \"https://db-rw.re8ch.com/auth/v1\"\nOAUTH_AUTHORIZE_URL\
+    \ = \"https://auth.re8ch.com/auth/v1/oauth/authorize\"\nOAUTH_CLIENT_ID = \"e93247af-5bc0-4f3d-829b-8a70e0a69d31\"\
+    \nOAUTH_REDIRECT = BASE_URL + \"/oauth/callback\"\nSESSION_COOKIE = \"__Host-access_oauth\"\
+    \nFLOW_COOKIE = \"__Host-access_oauth_flow\"\n\nPORTAL = \"\"\"<!doctype html><html\
+    \ lang=zh-CN><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>\n\
+    <title>access re8ch com</title><style>:root{color-scheme:dark}*{box-sizing:border-box}body{font:16px\
+    \ system-ui;margin:0;background:#101114;color:#eee}main{max-width:920px;margin:auto;padding:32px\
+    \ 20px}button,input,a.cta{font:inherit;padding:11px 16px;border-radius:9px;border:1px\
+    \ solid #3b414b}button{cursor:pointer}input{min-width:280px}a{color:#9ee6a8}.cta{display:inline-block;text-decoration:none;font-weight:650}.primary{background:#83dfa0;color:#102016;border-color:#83dfa0}.secondary{background:#292d35;color:#eee}.danger{color:#ff9c9c}article{background:#1d1f24;padding:20px;margin:14px\
+    \ 0;border-radius:14px}.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.choice{background:#17191e;border:1px\
+    \ solid #353a44;border-radius:12px;padding:18px}.recommended{border-color:#72d993}.badge{display:inline-block;background:#244a31;color:#a8f0bd;padding:3px\
+    \ 8px;border-radius:99px;font-size:13px;font-weight:700}.muted{color:#aaa}.warning{color:#ffd28a}.row{display:flex;gap:8px;flex-wrap:wrap}.steps{padding-left:22px;line-height:1.65}code.url{display:block;margin-top:10px;padding:10px;background:#0f1114;border-radius:8px;overflow-wrap:anywhere;color:#9ee6a8}@media(max-width:700px){.choice-grid{grid-template-columns:1fr}main{padding:20px\
+    \ 12px}}</style>\n<main><h1>access re8ch com</h1><p>Mihomo/Shadowrocket \u5B8C\
+    \u6574\u914D\u7F6E\uFF1A\u6D1B\u6749\u77F6\u53CC\u8282\u70B9\u4F18\u5148\u3001\
+    \u5FB7\u56FD\u8282\u70B9\u53EF\u7528\u65F6\u5907\u7528\u3001\u8282\u70B9\u5168\
+    \u4E0D\u53EF\u7528\u65F6\u76F4\u8FDE \xB7 \u6BCF\u6708 300 GB \u8F6F\u63D0\u9192\
+    </p><p id=a></p><form id=f><input id=n maxlength=64 placeholder='\u8BBE\u5907\u540D\
+    \u79F0\uFF0C\u4F8B\u5982 iPhone'><button>\u521B\u5EFA\u8BBE\u5907</button></form><div\
+    \ id=new></div><div id=o></div><p class=muted>\u8BBE\u5907\u5730\u5740\u53EA\u663E\
+    \u793A\u4E00\u6B21\uFF1B\u652F\u6301 V2Box \u8282\u70B9\u8BA2\u9605\u4EE5\u53CA\
+    \ Shadowrocket \u5B8C\u6574\u914D\u7F6E\u3002</p></main>\n<script>const o=document.querySelector('#o'),a=document.querySelector('#a'),nn=document.querySelector('#new');function\
+    \ esc(s){let d=document.createElement('div');d.textContent=s;return d.innerHTML}function\
+    \ size(n){return (n/1073741824).toFixed(2)+' GB'}function when(n){return n?new\
+    \ Date(n*1000).toLocaleString():'\u5C1A\u65E0'}async function load(){let r=await\
+    \ fetch('/api/me'),j=await r.json();if(!r.ok){a.textContent=j.error||'\u672A\u6388\
+    \u6743';return}a.textContent='\u8D26\u53F7\uFF1A'+j.account+(j.admin?' \xB7 \u7BA1\
+    \u7406\u5458':'');o.innerHTML=(j.devices||[]).map(x=>`<article><b>${esc(x.name)}</b>\
+    \ \xB7 ${x.enabled?'\u542F\u7528':'\u5DF2\u64A4\u9500'}<br><span class=muted>${x.activeConnections||0}\
+    \ \u4E2A\u8FDE\u63A5 \xB7 \u672C\u6708 ${size((x.upload||0)+(x.download||0))}\
+    \ \xB7 \u6700\u540E\u5728\u7EBF ${when(x.lastSeenAt)}</span><div class=row><button\
+    \ onclick=\"rotate('${x.id}')\">\u8F6E\u6362\u5E76\u751F\u6210\u65B0\u914D\u7F6E\
+    </button><button class=secondary onclick=\"revoke('${x.id}')\">\u64A4\u9500\u8BBE\
+    \u5907</button></div></article>`).join('')||'<article>\u8FD8\u6CA1\u6709\u8BBE\
+    \u5907\u3002\u8F93\u5165\u8BBE\u5907\u540D\u79F0\u5E76\u521B\u5EFA\uFF0C\u9875\
+    \u9762\u4F1A\u751F\u6210\u4E00\u6B21\u6027\u5BFC\u5165\u5730\u5740\u3002</article>'}async\
+    \ function revoke(id){await fetch('/api/devices/'+id,{method:'DELETE'});load()}async\
+    \ function rotate(id){let r=await fetch('/api/devices/'+id+'/rotate',{method:'POST'}),j=await\
+    \ r.json();show(j)}function show(j){if(!j.subscriptionURL)return alert(j.error||'\u521B\
+    \u5EFA\u5931\u8D25');nn.innerHTML=`<article><h2>\u9009\u62E9\u5BFC\u5165\u65B9\
+    \u5F0F</h2><div class=choice-grid><section class=\"choice recommended\"><span\
+    \ class=badge>V2Box</span><h3>V2Box \u8282\u70B9\u8BA2\u9605</h3><p>\u76F4\u63A5\
+    \u521B\u5EFA\u53EF\u81EA\u52A8\u66F4\u65B0\u7684\u8BBE\u5907\u4E13\u5C5E\u8BA2\
+    \u9605\uFF0C\u5305\u542B\u5F53\u524D\u5DF2\u9A8C\u8BC1\u7684\u8282\u70B9\uFF1B\
+    \u6D41\u91CF\u4FE1\u606F\u548C\u5230\u671F\u65F6\u95F4\u4F1A\u968F\u8BA2\u9605\
+    \u8FD4\u56DE\u3002</p><div class=row><a class=\"cta primary\" href=\"${esc(j.v2boxImportURL)}\"\
+    >\u4E00\u952E\u5BFC\u5165 V2Box</a><a class=\"cta secondary\" href=\"${esc(j.v2boxURL)}\"\
+    >\u6253\u5F00\u8BA2\u9605\u914D\u7F6E</a></div><h4>\u624B\u52A8\u5BFC\u5165</h4><ol\
+    \ class=steps><li>\u8FDB\u5165 V2Box \u2192 <b>Configs</b> \u2192 <b>+</b> \u2192\
+    \ <b>Add Subscription</b>\u3002</li><li>\u540D\u79F0\u586B\u5199 <code>access\
+    \ re8ch com</code>\uFF0CURL \u7C98\u8D34\u4E0B\u65B9\u5730\u5740\u5E76\u4FDD\u5B58\
+    \u3002</li></ol><code class=url>${esc(j.v2boxURL)}</code></section><section class=choice><h3>Shadowrocket\
+    \ \u5B8C\u6574\u914D\u7F6E</h3><p>\u5305\u542B\u8282\u70B9\u3001\u7B56\u7565\u7EC4\
+    \u3001OpenAI/Google \u5206\u6D41\u89C4\u5219\u548C\u5B89\u5168 DNS\u3002</p><div\
+    \ class=row><a class=\"cta secondary\" href=\"${esc(j.shadowrocketImportURL)}\"\
+    >\u4E00\u952E\u5B89\u88C5</a><a class=\"cta secondary\" href=\"${esc(j.shadowrocketURL)}\"\
+    \ download=\"re8ch-shadowrocket.conf\">\u4E0B\u8F7D .conf</a></div><hr><h3>Mihomo\
+    \ \u5B8C\u6574\u914D\u7F6E</h3><p>\u4F9B Clash Meta\u3001Mihomo \u548C\u517C\u5BB9\
+    \u5BA2\u6237\u7AEF\u4F7F\u7528\u3002</p><div class=row><a class=\"cta secondary\"\
+    \ href=\"${esc(j.clashMetaImportURL)}\">\u4E00\u952E\u5BFC\u5165 ClashX Meta</a><a\
+    \ class=\"cta secondary\" href=\"${esc(j.mihomoURL)}\">\u6253\u5F00 Mihomo YAML</a></div></section></div></article>`}f.onsubmit=async\
+    \ e=>{e.preventDefault();let r=await fetch('/api/devices',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:n.value||'device'})}),j=await\
+    \ r.json();show(j);load()};load()</script></html>\"\"\"\n\nPORTAL = PORTAL.replace(\n\
+    \    '<p>\u5305\u542B\u8282\u70B9\u3001\u7B56\u7565\u7EC4\u3001OpenAI/Google \u5206\
+    \u6D41\u89C4\u5219\u548C\u5B89\u5168 DNS\u3002</p><div class=row><a class=\"cta\
+    \ secondary\" href=\"${esc(j.shadowrocketImportURL)}\">\u4E00\u952E\u5B89\u88C5\
+    </a>',\n    '<p>\u5305\u542B\u8282\u70B9\u3001\u7B56\u7565\u7EC4\u3001OpenAI/Google\
+    \ \u5206\u6D41\u89C4\u5219\u548C\u5B89\u5168 DNS\u3002iPhone/iPad \u53EF\u4E00\
+    \u952E\u5B89\u88C5\uFF1BmacOS \u8BF7\u6DFB\u52A0\u4E3A\u8FDC\u7A0B\u914D\u7F6E\
+    \uFF0C\u4E0D\u8981\u6DFB\u52A0\u5230\u9996\u9875\u7684\u8282\u70B9\u8BA2\u9605\
+    \u3002</p><div class=row><a class=\"cta secondary\" href=\"${esc(j.shadowrocketImportURL)}\"\
+    >iPhone/iPad \u4E00\u952E\u5B89\u88C5</a>',\n).replace(\n    '<a class=\"cta secondary\"\
+    \ href=\"${esc(j.shadowrocketURL)}\" download=\"re8ch-shadowrocket.conf\">\u4E0B\
+    \u8F7D .conf</a></div><hr><h3>Mihomo \u5B8C\u6574\u914D\u7F6E</h3>',\n    '<a\
+    \ class=\"cta secondary\" href=\"${esc(j.shadowrocketURL)}\" download=\"re8ch-shadowrocket.conf\"\
+    >\u4E0B\u8F7D .conf</a></div><h4>macOS \u7A33\u5B9A\u5BFC\u5165</h4><ol class=steps><li>\u590D\
+    \u5236\u4E0B\u65B9\u5B8C\u6574\u914D\u7F6E\u5730\u5740\u3002</li><li>\u8FDB\u5165\
+    \ Shadowrocket \u2192 <b>\u914D\u7F6E</b> \u2192 <b>+</b> \u2192 <b>\u4ECE URL\
+    \ \u4E0B\u8F7D</b>\u3002</li><li>\u7C98\u8D34\u5730\u5740\u5E76\u4E0B\u8F7D\uFF0C\
+    \u70B9\u51FB <code>shadowrocket.conf</code> \u2192 <b>\u4F7F\u7528\u914D\u7F6E\
+    </b>\u3002\u4EE5\u540E\u5728\u914D\u7F6E\u9875\u9009\u62E9<b>\u66F4\u65B0</b>\uFF0C\
+    \u4E0D\u8981\u5728\u9996\u9875\u521B\u5EFA\u8282\u70B9\u8BA2\u9605\u3002</li></ol><code\
+    \ class=url>${esc(j.shadowrocketURL)}</code><hr><h3>Mihomo \u5B8C\u6574\u914D\u7F6E\
+    </h3>',\n)\n\nPORTAL = PORTAL.replace(\n    '<p>\u4F9B Clash Meta\u3001Mihomo\
+    \ \u548C\u517C\u5BB9\u5BA2\u6237\u7AEF\u4F7F\u7528\u3002</p><div class=row>',\n\
+    \    '<p>\u4F9B Clash Meta\u3001Mihomo \u548C v2rayN \u7684 Mihomo \u6838\u5FC3\
+    \u4F7F\u7528\u3002v2rayN \u8BF7\u901A\u8FC7\u300C\u670D\u52A1\u5668 \u2192 \u6DFB\
+    \u52A0\u81EA\u5B9A\u4E49\u914D\u7F6E\u670D\u52A1\u5668\u300D\u9009\u62E9 Mihomo\uFF0C\
+    \u586B\u5165\u4E0B\u65B9 YAML \u5730\u5740\uFF1B\u666E\u901A\u8282\u70B9\u8BA2\
+    \u9605\u4E0D\u4F1A\u5BFC\u5165\u8FD9\u4EFD\u5B8C\u6574\u7B56\u7565\u3002</p><div\
+    \ class=row>',\n).replace(\n    '<a class=\"cta secondary\" href=\"${esc(j.mihomoURL)}\"\
+    >\u6253\u5F00 Mihomo YAML</a></div></section>',\n    '<a class=\"cta secondary\"\
+    \ href=\"${esc(j.mihomoURL)}\">\u6253\u5F00 Mihomo YAML</a></div><code class=url>${esc(j.mihomoURL)}</code></section>',\n\
+    )\n\nADMIN = \"\"\"<!doctype html><html lang=zh-CN><meta charset=utf-8><meta name=viewport\
+    \ content='width=device-width,initial-scale=1'><title>Access Admin</title><style>body{font:15px\
+    \ system-ui;background:#101114;color:#eee;margin:30px}article{background:#1d1f24;padding:14px;margin:10px;border-radius:10px}button{padding:7px}</style><h1>Access\
+    \ Admin</h1><div id=o></div><script>function esc(s){let d=document.createElement('div');d.textContent=String(s);return\
+    \ d.innerHTML}async function load(){let r=await fetch('/api/admin/users'),j=await\
+    \ r.json();o.innerHTML=Object.entries(j.members||{}).map(([u,m])=>`<article><b>${esc(u)}</b>\
+    \ \xB7 ${esc(m.permission||'')}${m.admin?' \xB7 admin':''}<div>${(j.devices[u]||[]).map(d=>`${esc(d.name)}\
+    \ \xB7 ${d.enabled?'\u542F\u7528':'\u64A4\u9500'} \xB7 ${d.activeConnections||0}\
+    \ \u8FDE\u63A5 <button onclick=\"revoke('${d.id}')\">\u64A4\u9500</button>`).join('<br>')||'\u65E0\
+    \u8BBE\u5907'}</div></article>`).join('')}async function revoke(id){await fetch('/api/admin/devices/'+id,{method:'DELETE'});load()}load()</script></html>\"\
+    \"\"\n\n\ndef kube_request(method: str, path: str, body: dict | None = None, content_type:\
+    \ str = \"application/json\") -> dict:\n    host, port = os.environ[\"KUBERNETES_SERVICE_HOST\"\
+    ], os.environ[\"KUBERNETES_SERVICE_PORT_HTTPS\"]\n    token = Path(\"/var/run/secrets/kubernetes.io/serviceaccount/token\"\
+    ).read_text().strip()\n    raw = json.dumps(body).encode() if body is not None\
+    \ else None\n    request = urllib.request.Request(f\"https://{host}:{port}{path}\"\
+    , data=raw, method=method,\n                                     headers={\"Authorization\"\
+    : f\"Bearer {token}\", \"Content-Type\": content_type})\n    context = ssl.create_default_context(cafile=\"\
+    /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\")\n    with urllib.request.urlopen(request,\
+    \ context=context, timeout=5) as response:\n        return json.load(response)\
+    \ if response.length != 0 else {}\n\n\ndef edge_access_nodes(nodes: list[dict],\
+    \ pods: list[dict], probe) -> tuple[Node, ...]:\n    ready_pods = {\n        pod.get(\"\
+    spec\", {}).get(\"nodeName\")\n        for pod in pods\n        if pod.get(\"\
+    metadata\", {}).get(\"labels\", {}).get(\"app.kubernetes.io/name\") == \"edge-access-anytls\"\
+    \n        and any(item.get(\"type\") == \"Ready\" and item.get(\"status\") ==\
+    \ \"True\"\n                for item in pod.get(\"status\", {}).get(\"conditions\"\
+    , []))\n    }\n    discovered = []\n    for node in nodes:\n        metadata =\
+    \ node.get(\"metadata\", {})\n        name = metadata.get(\"name\", \"\")\n  \
+    \      if name not in ready_pods or metadata.get(\"labels\", {}).get(\"networking.re8ch.com/edge-access-anytls\"\
+    ) != \"enabled\":\n            continue\n        if not any(item.get(\"type\"\
+    ) == \"Ready\" and item.get(\"status\") == \"True\"\n                   for item\
+    \ in node.get(\"status\", {}).get(\"conditions\", [])):\n            continue\n\
+    \        addresses = [item.get(\"address\", \"\") for item in node.get(\"status\"\
+    , {}).get(\"addresses\", [])\n                     if item.get(\"type\") == \"\
+    ExternalIP\"]\n        public_ip = next((ip for ip in addresses if _global_ipv4(ip)),\
+    \ \"\")\n        if not public_ip or not probe(public_ip):\n            continue\n\
+    \        capacity = int(metadata.get(\"annotations\", {}).get(\"networking.re8ch.com/capacity-mbps\"\
+    , \"0\"))\n        if capacity < 100:\n            continue\n        region =\
+    \ metadata.get(\"labels\", {}).get(\"topology.kubernetes.io/region\", \"global\"\
+    )\n        labels = {(\"overseas-la-2\", \"us-ca\"): \"\U0001F1FA\U0001F1F8 \u6D1B\
+    \u6749\u77F6 2 \xB7 EdgeAccess\",\n                  (\"overseas-flk\", \"de-fsn\"\
+    ): \"\U0001F1E9\U0001F1EA \u5FB7\u56FD Falkenstein \xB7 EdgeAccess\"}\n      \
+    \  discovered.append(Node(f\"edge-access-{name}\", labels.get((name, region),\
+    \ f\"\U0001F310 EdgeAccess \xB7 {name}\"),\n                               Publication(\"\
+    anytls\", public_ip, 24443, \"access.re8ch.com\"),\n                         \
+    \      RuntimeTarget(\"edge-access-anytls\", \"edge-access-anytls\", region, capacity)))\n\
+    \    return tuple(sorted(discovered, key=lambda node: node.node_id))\n\n\ndef\
+    \ _global_ipv4(value: str) -> bool:\n    try:\n        address = ipaddress.ip_address(value)\n\
+    \        return address.version == 4 and address.is_global\n    except ValueError:\n\
+    \        return False\n\n\ndef _edge_tls_ready(address: str) -> bool:\n    try:\n\
+    \        with socket.create_connection((address, 24443), timeout=2) as connection:\n\
+    \            with ssl.create_default_context().wrap_socket(connection, server_hostname=\"\
+    access.re8ch.com\"):\n                return True\n    except (OSError, ssl.SSLError):\n\
+    \        return False\n\n\ndef subscription_nodes() -> tuple[Node, ...]:\n   \
+    \ try:\n        nodes = kube_request(\"GET\", \"/api/v1/nodes\").get(\"items\"\
+    , [])\n        pods = kube_request(\"GET\", f\"/api/v1/namespaces/{NAMESPACE}/pods?labelSelector=app.kubernetes.io%2Fname%3Dedge-access-anytls\"\
+    ).get(\"items\", [])\n        return DEFAULT_NODES + edge_access_nodes(nodes,\
+    \ pods, _edge_tls_ready)\n    except (OSError, ValueError, KeyError) as exc:\n\
+    \        print(json.dumps({\"level\": \"warning\", \"event\": \"edge-access-discovery-failed\"\
+    , \"error\": type(exc).__name__}), flush=True)\n        return DEFAULT_NODES\n\
+    \n\ndef configmap(name: str) -> tuple[dict, dict]:\n    item = kube_request(\"\
+    GET\", f\"/api/v1/namespaces/{NAMESPACE}/configmaps/{name}\")\n    return item,\
+    \ item.get(\"data\", {})\n\n\ndef json_state(name: str, key: str) -> dict:\n \
+    \   _item, data = configmap(name)\n    return json.loads(data.get(key, \"{}\"\
+    ))\n\n\ndef devices_state() -> dict:\n    return json_state(STATE_NAME, \"devices.json\"\
+    )\n\n\ndef auth_state() -> dict:\n    return json_state(AUTH_NAME, \"members.json\"\
+    )\n\n\ndef usage_state() -> dict:\n    try:\n        _item, data = configmap(USAGE_NAME)\n\
+    \        merged = {}\n        for key, raw in data.items():\n            if not\
+    \ key.startswith(\"usage-\"):\n                continue\n            for device,\
+    \ stats in json.loads(raw).get(\"devices\", {}).items():\n                item\
+    \ = merged.setdefault(device, {\"upload\": 0, \"download\": 0, \"activeConnections\"\
+    : 0})\n                item[\"upload\"] += int(stats.get(\"upload\", 0))\n   \
+    \             item[\"download\"] += int(stats.get(\"download\", 0))\n        \
+    \        item[\"activeConnections\"] += int(stats.get(\"activeConnections\", 0))\n\
+    \                if int(stats.get(\"lastSeenAt\", 0)) > int(item.get(\"lastSeenAt\"\
+    , 0) or 0):\n                    item[\"lastSeenAt\"] = stats.get(\"lastSeenAt\"\
+    )\n        return merged\n    except urllib.error.HTTPError as exc:\n        if\
+    \ exc.code == 404:\n            return {}\n        raise\n\n\ndef update_devices(mutator,\
+    \ attempts: int = 5) -> dict:\n    for _ in range(attempts):\n        item, data\
+    \ = configmap(STATE_NAME)\n        devices = json.loads(data.get(\"devices.json\"\
+    , \"{}\"))\n        result = mutator(devices)\n        item[\"data\"] = {**data,\
+    \ \"devices.json\": json.dumps(devices, separators=(\",\", \":\"), sort_keys=True)}\n\
+    \        item.pop(\"status\", None)\n        try:\n            kube_request(\"\
+    PUT\", f\"/api/v1/namespaces/{NAMESPACE}/configmaps/{STATE_NAME}\", item)\n  \
+    \          return result\n        except urllib.error.HTTPError as exc:\n    \
+    \        if exc.code != 409:\n                raise\n    raise RuntimeError(\"\
+    device state update conflict\")\n\n\ndef identity(headers) -> str:\n    token\
+    \ = read_cookie(headers, SESSION_COOKIE)\n    if not token:\n        raise PermissionError(\"\
+    login required\")\n    access_token = unseal(token, \"session\", 3600).get(\"\
+    access_token\")\n    if not isinstance(access_token, str) or not access_token:\n\
+    \        raise PermissionError(\"login required\")\n    return subject_from_token(access_token)\n\
+    \n\ndef subject_from_token(access_token: str) -> str:\n    request = urllib.request.Request(OAUTH_ISSUER\
+    \ + \"/user\", headers={\"Authorization\": \"Bearer \" + access_token})\n    try:\n\
+    \        with urllib.request.urlopen(request, timeout=5) as response:\n      \
+    \      user = json.load(response)\n    except urllib.error.HTTPError as exc:\n\
+    \        if exc.code in (401, 403):\n            raise PermissionError(\"login\
+    \ required\") from exc\n        raise RuntimeError(\"GoTrue unavailable\") from\
+    \ exc\n    except (urllib.error.URLError, TimeoutError, ValueError) as exc:\n\
+    \        raise RuntimeError(\"GoTrue unavailable\") from exc\n    if not isinstance(user,\
+    \ dict) or not user.get(\"id\"):\n        raise PermissionError(\"login required\"\
+    )\n    github_ids = {str(item.get(\"id\")) for item in user.get(\"identities\"\
+    , [])\n                  if isinstance(item, dict) and item.get(\"provider\")\
+    \ == \"github\" and item.get(\"id\")}\n    members = auth_state().get(\"members\"\
+    , {})\n    matches = [name for name, member in members.items() if member.get(\"\
+    githubId\") in github_ids]\n    if len(matches) != 1:\n        raise PermissionError(\"\
+    linked GitHub membership required\")\n    return matches[0]\n\n\ndef login_location()\
+    \ -> str:\n    return BASE_URL + \"/oauth/start\"\n\n\ndef read_cookie(headers,\
+    \ name: str) -> str:\n    return next((part.strip().split(\"=\", 1)[1] for part\
+    \ in headers.get(\"Cookie\", \"\").split(\";\")\n                 if part.strip().startswith(name\
+    \ + \"=\")), \"\")\n\n\ndef seal(data: dict, purpose: str) -> str:\n    from core\
+    \ import b64url\n    payload = b64url(json.dumps({**data, \"iat\": int(time.time())},\
+    \ separators=(\",\", \":\")).encode())\n    signature = b64url(hmac.new(HMAC_SECRET,\
+    \ (purpose + \":\" + payload).encode(), hashlib.sha256).digest())\n    return\
+    \ payload + \".\" + signature\n\n\ndef unseal(value: str, purpose: str, max_age:\
+    \ int) -> dict:\n    import base64\n    try:\n        payload, signature = value.split(\"\
+    .\", 1)\n        expected = seal_signature(payload, purpose)\n        if not hmac.compare_digest(signature,\
+    \ expected):\n            raise ValueError(\"invalid signature\")\n        data\
+    \ = json.loads(base64.urlsafe_b64decode(payload + \"=\" * (-len(payload) % 4)))\n\
+    \        age = int(time.time()) - int(data[\"iat\"])\n        if age < 0 or age\
+    \ > max_age:\n            raise ValueError(\"expired cookie\")\n        return\
+    \ data\n    except (ValueError, KeyError, TypeError) as exc:\n        raise PermissionError(\"\
+    login required\") from exc\n\n\ndef seal_signature(payload: str, purpose: str)\
+    \ -> str:\n    from core import b64url\n    return b64url(hmac.new(HMAC_SECRET,\
+    \ (purpose + \":\" + payload).encode(), hashlib.sha256).digest())\n\n\ndef same_origin(headers)\
+    \ -> bool:\n    origin = headers.get(\"Origin\") or headers.get(\"Referer\", \"\
+    \")\n    parsed = urlparse(origin)\n    return parsed.scheme == \"https\" and\
+    \ parsed.netloc == urlparse(BASE_URL).netloc\n\n\ndef member_for(user: str) ->\
+    \ dict:\n    return authorization(auth_state(), user)\n\n\ndef owned_by(record:\
+    \ dict, user: str) -> bool:\n    try:\n        return canonical_subject(record.get(\"\
+    subject\"), None, IDENTITY_ALIASES) == user\n    except ValueError:\n        return\
+    \ False\n\n\ndef checked_subscription(path: str) -> tuple[str, dict, dict, str]:\n\
+    \    relative = path.removeprefix(\"/s/\").split(\"?\", 1)[0]\n    suffix = \"\
+    \"\n    for candidate in (\"/mihomo.yaml\", \"/shadowrocket.conf\", \"/v2box.txt\"\
+    ):\n        if relative.endswith(candidate):\n            relative, suffix = relative[:-len(candidate)],\
+    \ candidate\n            break\n    token = relative.strip(\"/\")\n    payload\
+    \ = verify_token(HMAC_SECRET, token)\n    record = devices_state().get(payload[\"\
+    jti\"])\n    if not record or not record.get(\"enabled\") or record.get(\"tokenHash\"\
+    ) != hashlib.sha256(token.encode()).hexdigest():\n        raise PermissionError(\"\
+    subscription revoked\")\n    member_for(canonical_subject(record.get(\"subject\"\
+    ), None, IDENTITY_ALIASES))\n    return token, payload, record, suffix\n\n\ndef\
+    \ checked_rule(path: str) -> tuple[str, Path]:\n    relative = path.removeprefix(\"\
+    /r/\").split(\"?\", 1)[0]\n    token, marker, filename = relative.partition(\"\
+    /current/\")\n    if not marker or not filename or Path(filename).name != filename:\n\
+    \        raise ValueError(\"invalid rule path\")\n    payload = verify_token(HMAC_SECRET,\
+    \ token)\n    record = devices_state().get(payload[\"jti\"])\n    if not record\
+    \ or not record.get(\"enabled\") or record.get(\"tokenHash\") != hashlib.sha256(token.encode()).hexdigest():\n\
+    \        raise PermissionError(\"subscription revoked\")\n    member_for(canonical_subject(record.get(\"\
+    subject\"), None, IDENTITY_ALIASES))\n    return token, RULES_ROOT / \"current\"\
+    \ / filename\n\n\nclass Handler(BaseHTTPRequestHandler):\n    def redirect(self,\
+    \ location: str, cookie: str | None = None) -> None:\n        self.send_response(302)\n\
+    \        self.send_header(\"Location\", location)\n        self.send_header(\"\
+    Cache-Control\", \"no-store\")\n        if cookie:\n            self.send_header(\"\
+    Set-Cookie\", cookie)\n        self.end_headers()\n\n    def send(self, status:\
+    \ int, raw: bytes, content_type: str, headers: dict[str, str] | None = None, cache:\
+    \ str = \"no-store\") -> None:\n        self.send_response(status)\n        self.send_header(\"\
+    Content-Type\", content_type)\n        self.send_header(\"Cache-Control\", cache)\n\
+    \        self.send_header(\"X-Content-Type-Options\", \"nosniff\")\n        for\
+    \ key, value in (headers or {}).items():\n            self.send_header(key, value)\n\
+    \        self.send_header(\"Content-Length\", str(len(raw)))\n        self.end_headers()\n\
+    \        self.wfile.write(raw)\n\n    def json(self, status: int, value: object)\
+    \ -> None:\n        self.send(status, (json.dumps(value, separators=(\",\", \"\
+    :\"), ensure_ascii=False) + \"\\n\").encode(), \"application/json\")\n\n    def\
+    \ body(self) -> dict:\n        length = min(int(self.headers.get(\"Content-Length\"\
+    , \"0\")), 65536)\n        return json.loads(self.rfile.read(length) or b\"{}\"\
+    )\n\n    def device_view(self, key: str, value: dict, usage: dict) -> dict:\n\
+    \        stats = usage.get(key, {})\n        return {\"id\": key, \"name\": value.get(\"\
+    name\", \"device\"), \"enabled\": bool(value.get(\"enabled\")),\n            \
+    \    \"expiresAt\": value.get(\"expiresAt\"), \"lastSubscriptionAt\": value.get(\"\
+    lastSubscriptionAt\"),\n                \"lastSeenAt\": stats.get(\"lastSeenAt\"\
+    ), \"activeConnections\": int(stats.get(\"activeConnections\", 0)),\n        \
+    \        \"upload\": int(stats.get(\"upload\", 0)), \"download\": int(stats.get(\"\
+    download\", 0))}\n\n    def do_GET(self) -> None:\n        try:\n            path\
+    \ = self.path.split(\"?\", 1)[0]\n            if path == \"/healthz\":\n     \
+    \           return self.json(200, {\"ok\": True})\n            if path == \"/oauth/start\"\
+    :\n                verifier = secrets.token_urlsafe(32)\n                state\
+    \ = secrets.token_urlsafe(24)\n                from core import b64url\n     \
+    \           challenge = b64url(hashlib.sha256(verifier.encode()).digest())\n \
+    \               params = {\"response_type\": \"code\", \"client_id\": OAUTH_CLIENT_ID,\n\
+    \                          \"redirect_uri\": OAUTH_REDIRECT, \"scope\": \"openid\
+    \ profile email\",\n                          \"state\": state, \"code_challenge\"\
+    : challenge, \"code_challenge_method\": \"S256\"}\n                flow = seal({\"\
+    state\": state, \"verifier\": verifier}, \"flow\")\n                return self.redirect(OAUTH_AUTHORIZE_URL\
+    \ + \"?\" + urlencode(params),\n                                     f\"{FLOW_COOKIE}={flow};\
+    \ Max-Age=600; Path=/; Secure; HttpOnly; SameSite=Lax\")\n            if path\
+    \ == \"/oauth/callback\":\n                values = parse_qs(urlparse(self.path).query)\n\
+    \                flow = unseal(read_cookie(self.headers, FLOW_COOKIE), \"flow\"\
+    , 600)\n                state = values.get(\"state\", [\"\"])[0]\n           \
+    \     code = values.get(\"code\", [\"\"])[0]\n                if not code or not\
+    \ hmac.compare_digest(state, flow[\"state\"]):\n                    raise PermissionError(\"\
+    OAuth state or code invalid\")\n                form = urlencode({\"grant_type\"\
+    : \"authorization_code\", \"client_id\": OAUTH_CLIENT_ID,\n                  \
+    \                \"redirect_uri\": OAUTH_REDIRECT, \"code\": code,\n         \
+    \                         \"code_verifier\": flow[\"verifier\"]}).encode()\n \
+    \               request = urllib.request.Request(OAUTH_ISSUER + \"/oauth/token\"\
+    , data=form,\n                                                 headers={\"Content-Type\"\
+    : \"application/x-www-form-urlencoded\"})\n                with urllib.request.urlopen(request,\
+    \ timeout=8) as response:\n                    tokens = json.load(response)\n\
+    \                access_token = tokens.get(\"access_token\")\n               \
+    \ if not isinstance(access_token, str) or not access_token:\n                \
+    \    raise PermissionError(\"OAuth token missing\")\n                member_for(subject_from_token(access_token))\n\
+    \                cookie = seal({\"access_token\": access_token}, \"session\")\n\
+    \                self.send_response(302)\n                self.send_header(\"\
+    Location\", BASE_URL + \"/\")\n                self.send_header(\"Cache-Control\"\
+    , \"no-store\")\n                self.send_header(\"Set-Cookie\", f\"{FLOW_COOKIE}=;\
+    \ Max-Age=0; Path=/; Secure; HttpOnly; SameSite=Lax\")\n                self.send_header(\"\
+    Set-Cookie\", f\"{SESSION_COOKIE}={cookie}; Max-Age=3600; Path=/; Secure; HttpOnly;\
+    \ SameSite=Lax\")\n                self.end_headers()\n                return\n\
+    \            if path.startswith(\"/s/\"):\n                token, payload, record,\
+    \ suffix = checked_subscription(self.path)\n                now = int(time.time())\n\
+    \                update_devices(lambda devices: devices[payload[\"jti\"]].update({\"\
+    lastSubscriptionAt\": now}))\n                password = proxy_password(HMAC_SECRET,\
+    \ payload[\"jti\"])\n                nodes = subscription_nodes()\n          \
+    \      stats = usage_state().get(payload[\"jti\"], {})\n                headers\
+    \ = subscription_headers(int(stats.get(\"upload\", 0)), int(stats.get(\"download\"\
+    , 0)))\n                if suffix == \"/mihomo.yaml\":\n                    return\
+    \ self.send(200, mihomo_config(password, token, BASE_URL, nodes), \"text/yaml;\
+    \ charset=utf-8\", headers)\n                if suffix == \"/shadowrocket.conf\"\
+    :\n                    headers[\"Content-Disposition\"] = 'attachment; filename=\"\
+    shadowrocket.conf\"'\n                    return self.send(200, shadowrocket_config(password,\
+    \ token, BASE_URL, nodes), \"text/plain; charset=utf-8\", headers)\n         \
+    \       if suffix == \"/v2box.txt\":\n                    headers[\"Content-Disposition\"\
+    ] = 'attachment; filename=\"re8ch-v2box.txt\"'\n                    return self.send(200,\
+    \ v2box_subscription_body(password, nodes), \"text/plain; charset=utf-8\", headers)\n\
+    \                return self.send(200, subscription_body(password, nodes), \"\
+    text/plain; charset=utf-8\", headers)\n            if path.startswith(\"/r/\"\
+    ):\n                _token, file_path = checked_rule(self.path)\n            \
+    \    raw = file_path.read_bytes()\n                etag = hashlib.sha256(raw).hexdigest()\n\
+    \                if self.headers.get(\"If-None-Match\", \"\").strip('\"') == etag:\n\
+    \                    return self.send(304, b\"\", \"application/octet-stream\"\
+    , {\"ETag\": f'\"{etag}\"'}, \"private, max-age=3600\")\n                return\
+    \ self.send(200, raw, mimetypes.guess_type(file_path.name)[0] or \"application/octet-stream\"\
+    ,\n                                 {\"ETag\": f'\"{etag}\"'}, \"private, max-age=3600\"\
+    )\n            try:\n                user = identity(self.headers)\n         \
+    \   except PermissionError:\n                if path in (\"/\", \"/admin\"):\n\
+    \                    return self.redirect(login_location())\n                raise\n\
+    \            member = member_for(user)\n            devices, usage = devices_state(),\
+    \ usage_state()\n            records = [self.device_view(key, value, usage) for\
+    \ key, value in devices.items() if owned_by(value, user)]\n            if path\
+    \ in (\"/api/me\", \"/api/devices\"):\n                return self.json(200, {\"\
+    profile\": \"access re8ch com\", \"account\": user, \"admin\": bool(member.get(\"\
+    admin\")), \"devices\": records})\n            if path == \"/api/status\":\n \
+    \               cache = auth_state()\n                manifest = json.loads((RULES_ROOT\
+    \ / \"current\" / \"manifest.json\").read_text()) if (RULES_ROOT / \"current\"\
+    \ / \"manifest.json\").exists() else {}\n                return self.json(200,\
+    \ {\"profile\": \"access re8ch com\", \"quota\": \"300 GB soft\", \"nodes\": [public_node(n)\
+    \ for n in subscription_nodes()],\n                                       \"rulesVersion\"\
+    : manifest.get(\"version\"), \"authorizationLastSuccess\": cache.get(\"lastSuccess\"\
+    )})\n            if path == \"/api/admin/users\":\n                if not member.get(\"\
+    admin\"):\n                    raise PermissionError(\"administrator required\"\
+    )\n                by_user = {}\n                for key, value in devices.items():\n\
+    \                    by_user.setdefault(value.get(\"subject\", \"unknown\"), []).append(self.device_view(key,\
+    \ value, usage))\n                return self.json(200, {\"members\": auth_state().get(\"\
+    members\", {}), \"devices\": by_user})\n            if path == \"/admin\":\n \
+    \               if not member.get(\"admin\"):\n                    raise PermissionError(\"\
+    administrator required\")\n                return self.send(200, ADMIN.encode(),\
+    \ \"text/html; charset=utf-8\")\n            if path == \"/\":\n             \
+    \   return self.send(200, PORTAL.encode(), \"text/html; charset=utf-8\")\n   \
+    \         return self.json(404, {\"error\": \"not found\"})\n        except FileNotFoundError:\n\
+    \            self.json(503, {\"error\": \"rule snapshot unavailable\"})\n    \
+    \    except (PermissionError, ValueError) as exc:\n            self.json(401,\
+    \ {\"error\": str(exc)})\n        except Exception as exc:\n            self.json(503,\
+    \ {\"error\": type(exc).__name__})\n\n    def do_POST(self) -> None:\n       \
+    \ try:\n            if not same_origin(self.headers):\n                raise PermissionError(\"\
+    same-origin request required\")\n            user = identity(self.headers)\n \
+    \           member_for(user)\n            path = self.path.split(\"?\", 1)[0]\n\
+    \            if path != \"/api/devices\" and not (path.startswith(\"/api/devices/\"\
+    ) and path.endswith(\"/rotate\")):\n                return self.json(404, {\"\
+    error\": \"not found\"})\n            body = self.body()\n            old_id =\
+    \ path.removeprefix(\"/api/devices/\").removesuffix(\"/rotate\").strip(\"/\")\
+    \ if path.endswith(\"/rotate\") else \"\"\n            current = devices_state().get(old_id)\
+    \ if old_id else None\n            if old_id and (not current or not owned_by(current,\
+    \ user)):\n                raise PermissionError(\"device not found\")\n     \
+    \       name = (current or {}).get(\"name\") or str(body.get(\"name\", \"device\"\
+    )).strip()[:64] or \"device\"\n            token = issue_token(HMAC_SECRET, user,\
+    \ name)\n            payload = verify_token(HMAC_SECRET, token)\n            def\
+    \ mutate(devices):\n                if old_id:\n                    if old_id\
+    \ not in devices or not owned_by(devices[old_id], user):\n                   \
+    \     raise PermissionError(\"device not found\")\n                    devices[old_id][\"\
+    enabled\"] = False\n                devices[payload[\"jti\"]] = {\"subject\":\
+    \ user, \"name\": name, \"jti\": payload[\"jti\"], \"enabled\": True,\n      \
+    \                                       \"expiresAt\": payload[\"exp\"], \"tokenHash\"\
+    : hashlib.sha256(token.encode()).hexdigest()}\n            update_devices(mutate)\n\
+    \            root = f\"{BASE_URL}/s/{token}\"\n            shadowrocket_url =\
+    \ root + f\"/shadowrocket.conf?v={SHADOWROCKET_PROFILE_REVISION}\"\n         \
+    \   v2box_url = root + \"/v2box.txt\"\n            mihomo_url = root + \"/mihomo.yaml\"\
+    \n            return self.json(201, {\"id\": payload[\"jti\"], \"subscriptionURL\"\
+    : root, \"mihomoURL\": root + \"/mihomo.yaml\",\n                            \
+    \       \"clashMetaImportURL\": clash_meta_import_url(mihomo_url),\n         \
+    \                          \"shadowrocketURL\": shadowrocket_url,\n          \
+    \                         \"shadowrocketImportURL\": shadowrocket_import_url(shadowrocket_url),\n\
+    \                                   \"v2boxURL\": v2box_url,\n               \
+    \                    \"v2boxImportURL\": v2box_subscription_import_url(v2box_url)})\n\
+    \        except (PermissionError, ValueError) as exc:\n            self.json(400,\
+    \ {\"error\": str(exc)})\n        except Exception as exc:\n            self.json(503,\
+    \ {\"error\": type(exc).__name__})\n\n    def do_DELETE(self) -> None:\n     \
+    \   try:\n            if not same_origin(self.headers):\n                raise\
+    \ PermissionError(\"same-origin request required\")\n            user = identity(self.headers)\n\
+    \            member = member_for(user)\n            admin_path = self.path.startswith(\"\
+    /api/admin/devices/\")\n            if not self.path.startswith(\"/api/devices/\"\
+    ) and not admin_path:\n                return self.json(404, {\"error\": \"not\
+    \ found\"})\n            if admin_path and not member.get(\"admin\"):\n      \
+    \          raise PermissionError(\"administrator required\")\n            prefix\
+    \ = \"/api/admin/devices/\" if admin_path else \"/api/devices/\"\n           \
+    \ device_id = self.path.removeprefix(prefix).split(\"/\", 1)[0]\n            def\
+    \ mutate(devices):\n                record = devices.get(device_id)\n        \
+    \        if not record or (not admin_path and not owned_by(record, user)):\n \
+    \                   raise PermissionError(\"device not found\")\n            \
+    \    record[\"enabled\"] = False\n            update_devices(mutate)\n       \
+    \     self.send(204, b\"\", \"application/json\")\n        except PermissionError\
+    \ as exc:\n            self.json(404, {\"error\": str(exc)})\n        except Exception\
+    \ as exc:\n            self.json(503, {\"error\": type(exc).__name__})\n\n   \
+    \ def log_message(self, _format: str, *_args: object) -> None:\n        return\n\
+    \n\nif __name__ == \"__main__\":\n    ThreadingHTTPServer((\"0.0.0.0\", int(os.getenv(\"\
+    HTTP_PORT\", \"8080\"))), Handler).serve_forever()\n"
+  controller.py: "#!/usr/bin/env python3\n\"\"\"GitHub collaborator reconciler and\
+    \ AnyTLS/Hysteria2 credential controller.\"\"\"\n\nfrom __future__ import annotations\n\
+    \nimport base64\nimport hashlib\nimport json\nimport os\nimport ssl\nimport time\n\
+    import urllib.error\nimport urllib.request\nfrom pathlib import Path\n\nfrom core\
+    \ import AUTH_MAX_STALE_SECONDS, canonical_subject, proxy_password\n\nNAMESPACE\
+    \ = os.getenv(\"POD_NAMESPACE\", \"egress-fabric\")\nSTATE_NAME = os.getenv(\"\
+    STATE_CONFIGMAP\", \"access-subscription-devices\")\nAUTH_NAME = os.getenv(\"\
+    AUTH_CONFIGMAP\", \"access-members-cache\")\nUSERS_SECRET = os.getenv(\"USERS_SECRET\"\
+    , \"personal-access-users\")\nDEPLOYMENTS = tuple(filter(None, os.getenv(\"ACCESS_DEPLOYMENTS\"\
+    , \"personal-access-us-ca,personal-access-my-kul,personal-access-us-la,personal-access-cn-loudi\"\
+    ).split(\",\")))\nDAEMONSETS = tuple(filter(None, os.getenv(\"ACCESS_DAEMONSETS\"\
+    , \"edge-access-anytls\").split(\",\")))\nALIASES = json.loads(os.getenv(\"IDENTITY_ALIASES_JSON\"\
+    , \"{}\"))\nAPP_ID = os.getenv(\"GITHUB_APP_ID\", \"\")\nINSTALLATION_ID = os.getenv(\"\
+    GITHUB_INSTALLATION_ID\", \"\")\nREPOSITORY = os.getenv(\"GITHUB_REPOSITORY\"\
+    , \"re8ch/access-edge-members\")\nPRIVATE_KEY_PATH = Path(os.getenv(\"GITHUB_PRIVATE_KEY_PATH\"\
+    , \"/github-app/private-key.pem\"))\nHMAC_SECRET_PATH = Path(os.getenv(\"HMAC_SECRET_PATH\"\
+    , \"/secrets/hmac-key\"))\n\n\ndef b64url(raw: bytes) -> str:\n    return base64.urlsafe_b64encode(raw).decode().rstrip(\"\
+    =\")\n\n\ndef _tlv(data: bytes, offset: int = 0) -> tuple[int, bytes, int]:\n\
+    \    tag = data[offset]\n    length = data[offset + 1]\n    used = 2\n    if length\
+    \ & 0x80:\n        count = length & 0x7F\n        length = int.from_bytes(data[offset\
+    \ + 2:offset + 2 + count], \"big\")\n        used += count\n    start = offset\
+    \ + used\n    return tag, data[start:start + length], start + length\n\n\ndef\
+    \ _children(sequence: bytes) -> list[tuple[int, bytes]]:\n    result, offset =\
+    \ [], 0\n    while offset < len(sequence):\n        tag, value, offset = _tlv(sequence,\
+    \ offset)\n        result.append((tag, value))\n    return result\n\n\ndef rsa_private_numbers(pem:\
+    \ bytes) -> tuple[int, int]:\n    body = b\"\".join(line.strip() for line in pem.splitlines()\
+    \ if not line.startswith(b\"---\"))\n    der = base64.b64decode(body)\n    tag,\
+    \ sequence, _ = _tlv(der)\n    if tag != 0x30:\n        raise ValueError(\"invalid\
+    \ RSA private key\")\n    items = _children(sequence)\n    if len(items) >= 3\
+    \ and items[1][0] == 0x30 and items[2][0] == 0x04:  # PKCS#8\n        tag, sequence,\
+    \ _ = _tlv(items[2][1])\n        if tag != 0x30:\n            raise ValueError(\"\
+    invalid PKCS#8 RSA key\")\n        items = _children(sequence)\n    if len(items)\
+    \ < 4 or any(items[index][0] != 0x02 for index in (1, 3)):\n        raise ValueError(\"\
+    unsupported RSA private key\")\n    return int.from_bytes(items[1][1], \"big\"\
+    ), int.from_bytes(items[3][1], \"big\")\n\n\ndef github_jwt(app_id: str, pem:\
+    \ bytes, now: int | None = None) -> str:\n    issued = int(time.time() if now\
+    \ is None else now)\n    header = b64url(b'{\"alg\":\"RS256\",\"typ\":\"JWT\"\
+    }')\n    payload = b64url(json.dumps({\"iat\": issued - 30, \"exp\": issued +\
+    \ 540, \"iss\": app_id}, separators=(\",\", \":\")).encode())\n    signing = f\"\
+    {header}.{payload}\".encode()\n    digest_info = bytes.fromhex(\"3031300d060960864801650304020105000420\"\
+    ) + hashlib.sha256(signing).digest()\n    modulus, private_exponent = rsa_private_numbers(pem)\n\
+    \    size = (modulus.bit_length() + 7) // 8\n    encoded = b\"\\x00\\x01\" + b\"\
+    \\xff\" * (size - len(digest_info) - 3) + b\"\\x00\" + digest_info\n    signature\
+    \ = pow(int.from_bytes(encoded, \"big\"), private_exponent, modulus).to_bytes(size,\
+    \ \"big\")\n    return f\"{header}.{payload}.{b64url(signature)}\"\n\n\ndef api_request(url:\
+    \ str, token: str, method: str = \"GET\", body: dict | None = None, etag: str\
+    \ = \"\"):\n    headers = {\"Accept\": \"application/vnd.github+json\", \"Authorization\"\
+    : f\"Bearer {token}\",\n               \"X-GitHub-Api-Version\": \"2026-03-10\"\
+    , \"User-Agent\": \"re8ch-access-controller\"}\n    if etag:\n        headers[\"\
+    If-None-Match\"] = etag\n    raw = json.dumps(body).encode() if body is not None\
+    \ else None\n    request = urllib.request.Request(url, data=raw, method=method,\
+    \ headers=headers)\n    try:\n        with urllib.request.urlopen(request, timeout=15)\
+    \ as response:\n            return response.status, response.headers, json.load(response)\n\
+    \    except urllib.error.HTTPError as exc:\n        if exc.code == 304:\n    \
+    \        return 304, exc.headers, None\n        raise\n\n\ndef installation_token()\
+    \ -> str:\n    jwt = github_jwt(APP_ID, PRIVATE_KEY_PATH.read_bytes())\n    _status,\
+    \ _headers, data = api_request(f\"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens\"\
+    , jwt, \"POST\", {})\n    return data[\"token\"]\n\n\ndef permission(item: dict)\
+    \ -> str:\n    role = str(item.get(\"role_name\", \"\")).casefold()\n    if role\
+    \ in {\"read\", \"pull\", \"triage\", \"write\", \"push\", \"maintain\", \"admin\"\
+    }:\n        return role\n    permissions = item.get(\"permissions\", {})\n   \
+    \ for candidate in (\"admin\", \"maintain\", \"push\", \"triage\", \"pull\"):\n\
+    \        if permissions.get(candidate):\n            return {\"push\": \"write\"\
+    , \"pull\": \"read\"}.get(candidate, candidate)\n    return \"none\"\n\n\ndef\
+    \ canonical_members(items: list[dict], aliases: dict[str, str] = ALIASES) -> dict:\n\
+    \    members = {}\n    for item in items:\n        login = str(item.get(\"login\"\
+    , \"\")).casefold()\n        role = permission(item)\n        if role not in {\"\
+    read\", \"pull\", \"triage\", \"write\", \"push\", \"maintain\", \"admin\"}:\n\
+    \            continue\n        subject = canonical_subject(login, None, aliases)\n\
+    \        members[subject] = {\"authorized\": True, \"admin\": role in {\"maintain\"\
+    , \"admin\"}, \"github\": login,\n                            \"githubId\": str(item.get(\"\
+    id\", \"\")), \"permission\": role}\n    return members\n\n\ndef kube_request(method:\
+    \ str, path: str, body: dict | None = None, content_type: str = \"application/json\"\
+    ) -> dict:\n    host, port = os.environ[\"KUBERNETES_SERVICE_HOST\"], os.environ[\"\
+    KUBERNETES_SERVICE_PORT_HTTPS\"]\n    token = Path(\"/var/run/secrets/kubernetes.io/serviceaccount/token\"\
+    ).read_text().strip()\n    raw = json.dumps(body).encode() if body is not None\
+    \ else None\n    request = urllib.request.Request(f\"https://{host}:{port}{path}\"\
+    , data=raw, method=method,\n                                     headers={\"Authorization\"\
+    : f\"Bearer {token}\", \"Content-Type\": content_type})\n    context = ssl.create_default_context(cafile=\"\
+    /var/run/secrets/kubernetes.io/serviceaccount/ca.crt\")\n    with urllib.request.urlopen(request,\
+    \ context=context, timeout=10) as response:\n        return json.load(response)\
+    \ if response.length != 0 else {}\n\n\ndef object_get(resource: str, name: str)\
+    \ -> dict:\n    return kube_request(\"GET\", f\"/api/v1/namespaces/{NAMESPACE}/{resource}/{name}\"\
+    )\n\n\ndef replace_configmap(item: dict, key: str, value: dict) -> None:\n   \
+    \ item[\"data\"] = {**item.get(\"data\", {}), key: json.dumps(value, separators=(\"\
+    ,\", \":\"), sort_keys=True)}\n    item.pop(\"status\", None)\n    kube_request(\"\
+    PUT\", f\"/api/v1/namespaces/{NAMESPACE}/configmaps/{item['metadata']['name']}\"\
+    , item)\n\n\ndef sync_members(previous: dict) -> dict:\n    token = installation_token()\n\
+    \    status, headers, data = api_request(f\"https://api.github.com/repos/{REPOSITORY}/collaborators?affiliation=all&per_page=100\"\
+    , token, etag=previous.get(\"etag\", \"\"))\n    now = int(time.time())\n    if\
+    \ status == 304:\n        return {**previous, \"lastSuccess\": now}\n    return\
+    \ {\"repository\": REPOSITORY, \"lastSuccess\": now, \"etag\": headers.get(\"\
+    ETag\", \"\"), \"members\": canonical_members(data)}\n\n\ndef has_users_revision(deployment:\
+    \ dict, revision: str) -> bool:\n    annotations = deployment.get(\"spec\", {}).get(\"\
+    template\", {}).get(\"metadata\", {}).get(\"annotations\", {}) or {}\n    return\
+    \ annotations.get(\"access.re8ch.com/users-revision\") == revision\n\n\ndef reconcile()\
+    \ -> None:\n    auth_item = object_get(\"configmaps\", AUTH_NAME)\n    previous\
+    \ = json.loads(auth_item.get(\"data\", {}).get(\"members.json\", \"{}\"))\n  \
+    \  try:\n        current = sync_members(previous)\n        replace_configmap(auth_item,\
+    \ \"members.json\", current)\n    except Exception as exc:\n        current =\
+    \ previous\n        print(json.dumps({\"level\": \"warning\", \"event\": \"github-sync-failed\"\
+    , \"error\": type(exc).__name__}), flush=True)\n    now = int(time.time())\n \
+    \   members = current.get(\"members\", {}) if now - int(current.get(\"lastSuccess\"\
+    , 0) or 0) <= AUTH_MAX_STALE_SECONDS else {}\n    devices_item = object_get(\"\
+    configmaps\", STATE_NAME)\n    devices = json.loads(devices_item.get(\"data\"\
+    , {}).get(\"devices.json\", \"{}\"))\n    changed = False\n    for record in devices.values():\n\
+    \        subject = canonical_subject(record.get(\"subject\"), None, ALIASES)\n\
+    \        if record.get(\"enabled\") and not members.get(subject, {}).get(\"authorized\"\
+    ):\n            record[\"enabled\"] = False\n            record[\"revokedReason\"\
+    ] = \"github-access-removed-or-stale\"\n            changed = True\n    if changed:\n\
+    \        replace_configmap(devices_item, \"devices.json\", devices)\n    hmac_secret\
+    \ = HMAC_SECRET_PATH.read_bytes().strip()\n    users = [f\"          {item['jti']}:\
+    \ {proxy_password(hmac_secret, item['jti'])}\" for item in devices.values()\n\
+    \             if item.get(\"enabled\") and members.get(canonical_subject(item.get(\"\
+    subject\"), None, ALIASES), {}).get(\"authorized\")]\n    if not users:\n    \
+    \    users = [\"          disabled-bootstrap: disabled\"]\n    users_yaml = \"\
+    \\n\".join(sorted(users)) + \"\\n\"\n    revision = hashlib.sha256(users_yaml.encode()).hexdigest()\n\
+    \    secret = object_get(\"secrets\", USERS_SECRET)\n    old_revision = secret.get(\"\
+    metadata\", {}).get(\"annotations\", {}).get(\"access.re8ch.com/users-revision\"\
+    )\n    if old_revision != revision:\n        patch = {\"metadata\": {\"annotations\"\
+    : {\"access.re8ch.com/users-revision\": revision}}, \"stringData\": {\"users.yaml\"\
+    : users_yaml}}\n        kube_request(\"PATCH\", f\"/api/v1/namespaces/{NAMESPACE}/secrets/{USERS_SECRET}\"\
+    , patch, \"application/merge-patch+json\")\n    for resource, names in ((\"deployments\"\
+    , DEPLOYMENTS), (\"daemonsets\", DAEMONSETS)):\n        for name in names:\n \
+    \           path = f\"/apis/apps/v1/namespaces/{NAMESPACE}/{resource}/{name}\"\
+    \n            current = kube_request(\"GET\", path)\n            if has_users_revision(current,\
+    \ revision):\n                continue\n            kube_request(\"PATCH\", path,\n\
+    \                         {\"spec\": {\"template\": {\"metadata\": {\"annotations\"\
+    : {\"access.re8ch.com/users-revision\": revision}}}}},\n                     \
+    \    \"application/merge-patch+json\")\n\n\nif __name__ == \"__main__\":\n   \
+    \ while True:\n        started = time.monotonic()\n        try:\n            reconcile()\n\
+    \        except Exception as exc:\n            print(json.dumps({\"level\": \"\
+    error\", \"event\": \"reconcile-failed\", \"error\": type(exc).__name__}), flush=True)\n\
+    \        time.sleep(max(1, 60 - (time.monotonic() - started)))\n"
+  core.py: "\"\"\"Pure helpers for the RE8CH personal access control plane.\"\"\"\n\
+    \nfrom __future__ import annotations\n\nimport base64\nimport hashlib\nimport\
+    \ hmac\nimport json\nimport secrets\nimport time\nfrom dataclasses import asdict,\
+    \ dataclass\nfrom datetime import datetime, timezone\nfrom urllib.parse import\
+    \ quote, urlencode\n\nMONTHLY_SOFT_LIMIT = 300 * 1024**3\nAUTH_MAX_STALE_SECONDS\
+    \ = 24 * 60 * 60\nPROFILE_TITLE = \"access re8ch com\"\nSHADOWROCKET_PROFILE_REVISION\
+    \ = \"20261003-la-preferred-de-fallback-1\"\n\n# Emergency publication gate: overseas-edge-50\
+    \ is retired and overseas-kl is\n# still recovering. Keep clients on the two independently\
+    \ reachable LA\n# listeners instead of allowing URL-test/fallback groups to flap\
+    \ across stale\n# routes. Re-enable KL only after its host and both protocols\
+    \ pass qualification.\nACTIVE_PUBLICATION_IDS = frozenset({\"direct-la-anytls\"\
+    , \"direct-la-hysteria2\"})\n\n# Keep critical mainland cloud consoles deterministic\
+    \ even when an upstream\n# community ruleset is incomplete or temporarily unavailable.\n\
+    CN_CLOUD_DIRECT_DOMAINS = (\n    \"cloud.tencent.com\",\n    \"tencentcloud.com\"\
+    ,\n    \"tencentcloudapi.com\",\n    \"qcloud.com\",\n    \"myqcloud.com\",\n\
+    \    \"qcloudcdn.com\",\n    \"aliyun.com\",\n    \"aliyuncs.com\",\n    \"alicdn.com\"\
+    ,\n    \"huaweicloud.com\",\n    \"huaweicloudapis.com\",\n    \"myhuaweicloud.com\"\
+    ,\n)\n\n# Remote-control traffic must never inherit the cross-border exit. Process\n\
+    # rules cover ToDesk's P2P sessions and dynamic UDP destinations; the domain\n\
+    # rule also protects clients that only honor system-proxy bypasses.\nREMOTE_CONTROL_DIRECT_DOMAINS\
+    \ = (\"todesk.com\",)\nREMOTE_CONTROL_DIRECT_PROCESSES = (\"ToDesk\", \"ToDesk_Service\"\
+    , \"ToDesk_Session_Proxy\")\n\n\n@dataclass(frozen=True)\nclass Publication:\n\
+    \    protocol: str\n    server: str\n    port: int\n    sni: str\n\n\n@dataclass(frozen=True)\n\
+    class RuntimeTarget:\n    service: str\n    listener: str\n    region: str\n \
+    \   qualified_mbps: int\n    healthy: bool = True\n\n\n@dataclass(frozen=True)\n\
+    class Node:\n    node_id: str\n    name: str\n    publication: Publication\n \
+    \   runtime: RuntimeTarget\n\n    @property\n    def protocol(self) -> str:\n\
+    \        return self.publication.protocol\n\n    @property\n    def server(self)\
+    \ -> str:\n        return self.publication.server\n\n    @property\n    def port(self)\
+    \ -> int:\n        return self.publication.port\n\n\nDEFAULT_NODES = (\n    Node(\"\
+    auto\", \"\u267B\uFE0F Auto \xB7 Smart Select\", Publication(\"anytls\", \"access.re8ch.com\"\
+    , 443, \"access.re8ch.com\"), RuntimeTarget(\"personal-access-auto\", \"access-anytls\"\
+    , \"auto\", 100)),\n    Node(\"us-ca\", \"\U0001F1FA\U0001F1F8 US \xB7 California\
+    \ \xB7 AnyTLS\", Publication(\"anytls\", \"us-ca.access.re8ch.com\", 443, \"us-ca.access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-us-ca\", \"access-anytls\", \"us-ca\", 100)),\n\
+    \    Node(\"backup\", \"\U0001F6DF Backup \xB7 Hysteria2\", Publication(\"hysteria2\"\
+    , \"backup.access.re8ch.com\", 443, \"backup.access.re8ch.com\"), RuntimeTarget(\"\
+    personal-access-hysteria2\", \"access-hysteria2\", \"auto\", 100, healthy=False)),\n\
+    \    # The first three entries above are immutable compatibility publications.\n\
+    \    # New topology-aware publications use distinct IDs and DNS names so an\n\
+    \    # existing Shadowrocket profile can refresh without losing a selected node.\n\
+    \    Node(\"route-auto-anytls\", \"\u267B\uFE0F RouteOS \xB7 Auto \u51B3\u7B56\
+    \ \xB7 AnyTLS\", Publication(\"anytls\", \"access.re8ch.com\", 443, \"access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-auto\", \"access-anytls\", \"routeos-auto\"\
+    , 100)),\n    Node(\"route-auto-hysteria2\", \"\u267B\uFE0F RouteOS \xB7 Auto\
+    \ \u51B3\u7B56 \xB7 Hysteria2\", Publication(\"hysteria2\", \"backup.access.re8ch.com\"\
+    , 443, \"backup.access.re8ch.com\"), RuntimeTarget(\"personal-access-hysteria2\"\
+    , \"access-hysteria2\", \"routeos-auto\", 100, healthy=False)),\n    Node(\"route-la-anytls\"\
+    , \"\U0001F1FA\U0001F1F8 RouteOS \xB7 \u6D1B\u6749\u77F6 \xB7 AnyTLS\", Publication(\"\
+    anytls\", \"route-la.access.re8ch.com\", 443, \"route-la.access.re8ch.com\"),\
+    \ RuntimeTarget(\"personal-access-us-la\", \"access-anytls\", \"us-la\", 100)),\n\
+    \    Node(\"route-la-hysteria2\", \"\U0001F1FA\U0001F1F8 RouteOS \xB7 \u6D1B\u6749\
+    \u77F6 \xB7 Hysteria2\", Publication(\"hysteria2\", \"route-la.access.re8ch.com\"\
+    , 4443, \"route-la.access.re8ch.com\"), RuntimeTarget(\"personal-access-us-la\"\
+    , \"access-hysteria2\", \"us-la\", 100, healthy=False)),\n    Node(\"route-kl-anytls\"\
+    , \"\U0001F1F2\U0001F1FE RouteOS \xB7 \u5409\u9686\u5761 \xB7 AnyTLS\", Publication(\"\
+    anytls\", \"my-kul.access.re8ch.com\", 443, \"my-kul.access.re8ch.com\"), RuntimeTarget(\"\
+    personal-access-my-kul\", \"access-anytls\", \"my-kul\", 100, healthy=False)),\n\
+    \    Node(\"route-kl-hysteria2\", \"\U0001F1F2\U0001F1FE RouteOS \xB7 \u5409\u9686\
+    \u5761 \xB7 Hysteria2\", Publication(\"hysteria2\", \"route-kl.access.re8ch.com\"\
+    , 4444, \"route-kl.access.re8ch.com\"), RuntimeTarget(\"personal-access-my-kul\"\
+    , \"access-hysteria2\", \"my-kul\", 100, healthy=False)),\n    Node(\"direct-la-anytls\"\
+    , \"\U0001F1FA\U0001F1F8 Edge Direct \xB7 \u6D1B\u6749\u77F6 \xB7 AnyTLS\", Publication(\"\
+    anytls\", \"direct-la.access.re8ch.com\", 24443, \"direct-la.access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-us-la\", \"access-anytls\", \"us-la-direct\"\
+    , 100)),\n    Node(\"direct-la-hysteria2\", \"\U0001F1FA\U0001F1F8 Edge Direct\
+    \ \xB7 \u6D1B\u6749\u77F6 \xB7 Hysteria2\", Publication(\"hysteria2\", \"direct-la.access.re8ch.com\"\
+    , 24444, \"direct-la.access.re8ch.com\"), RuntimeTarget(\"personal-access-us-la\"\
+    , \"access-hysteria2\", \"us-la-direct\", 100)),\n    Node(\"direct-ca-hysteria2\"\
+    , \"\U0001F1FA\U0001F1F8 Edge Direct \xB7 \u6D1B\u6749\u77F6 2 \xB7 Hysteria2\"\
+    , Publication(\"hysteria2\", \"direct-ca.access.re8ch.com\", 24444, \"direct-ca.access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-us-ca\", \"access-hysteria2\", \"us-ca-direct\"\
+    , 100)),\n    Node(\"direct-kl-anytls\", \"\U0001F1F2\U0001F1FE Edge Direct \xB7\
+    \ \u5409\u9686\u5761 \xB7 AnyTLS\", Publication(\"anytls\", \"direct-kl.access.re8ch.com\"\
+    , 24443, \"direct-kl.access.re8ch.com\"), RuntimeTarget(\"personal-access-my-kul\"\
+    , \"access-anytls\", \"my-kul-direct\", 100)),\n    Node(\"direct-kl-hysteria2\"\
+    , \"\U0001F1F2\U0001F1FE Edge Direct \xB7 \u5409\u9686\u5761 \xB7 Hysteria2\"\
+    , Publication(\"hysteria2\", \"direct-kl.access.re8ch.com\", 24444, \"direct-kl.access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-my-kul\", \"access-hysteria2\", \"my-kul-direct\"\
+    , 100)),\n    Node(\"direct-cn-anytls\", \"\U0001F1E8\U0001F1F3 Edge Direct \xB7\
+    \ \u5A04\u5E95 \xB7 AnyTLS\", Publication(\"anytls\", \"direct-cn.access.re8ch.com\"\
+    , 24443, \"direct-cn.access.re8ch.com\"), RuntimeTarget(\"personal-access-cn-loudi\"\
+    , \"access-anytls\", \"cn-loudi-direct\", 100)),\n    Node(\"direct-cn-hysteria2\"\
+    , \"\U0001F1E8\U0001F1F3 Edge Direct \xB7 \u5A04\u5E95 \xB7 Hysteria2\", Publication(\"\
+    hysteria2\", \"direct-cn.access.re8ch.com\", 24444, \"direct-cn.access.re8ch.com\"\
+    ), RuntimeTarget(\"personal-access-cn-loudi\", \"access-hysteria2\", \"cn-loudi-direct\"\
+    , 100)),\n)\n\nSERVICE_RULESETS = (\n    (\"ai\", \"\U0001F916 AI\"), (\"google\"\
+    , \"\U0001F50E Google / YouTube\"), (\"telegram\", \"\u2708\uFE0F Telegram\"),\n\
+    \    (\"streaming\", \"\U0001F3AC Streaming\"), (\"social\", \"\U0001F4AC Social\"\
+    ), (\"developer\", \"\U0001F9D1\u200D\U0001F4BB Developer\"),\n    (\"cloud\"\
+    , \"\u2601\uFE0F Cloud Storage\"), (\"speedtest\", \"\U0001F4F6 Speed Test\"),\n\
+    \    (\"apple\", \"\U0001F34E Apple\"), (\"microsoft\", \"\U0001FA9F Microsoft\"\
+    ), (\"games\", \"\U0001F3AE Games\"),\n)\n\n\ndef publication_enabled(node: Node)\
+    \ -> bool:\n    return node.node_id in ACTIVE_PUBLICATION_IDS or node.node_id.startswith(\"\
+    edge-access-\")\n\n\ndef published_nodes(nodes: tuple[Node, ...] = DEFAULT_NODES)\
+    \ -> tuple[Node, ...]:\n    return tuple(\n        node for node in nodes\n  \
+    \      if publication_enabled(node)\n        and node.runtime.healthy\n      \
+    \  and node.runtime.qualified_mbps >= 100\n    )\n\n\ndef priority_nodes(active:\
+    \ tuple[Node, ...]) -> tuple[tuple[Node, ...], tuple[Node, ...]]:\n    \"\"\"\
+    Prefer both LA hosts, retaining Hysteria2 on the first host as a spare.\"\"\"\n\
+    \    by_id = {node.node_id: node for node in active}\n    # direct-la is the qualified\
+    \ overseas-la host until its new EdgeAccess\n    # listener is enabled. Do not\
+    \ drop it when overseas-la-2 is discovered.\n    la_one = by_id.get(\"edge-access-overseas-la\"\
+    ) or by_id.get(\"direct-la-anytls\")\n    preferred = tuple(node for node in (\n\
+    \        la_one, by_id.get(\"edge-access-overseas-la-2\"), by_id.get(\"direct-la-hysteria2\"\
+    )) if node)\n    backup = tuple(node for node in active if node.node_id == \"\
+    edge-access-overseas-flk\")\n    return preferred, backup\n\n\ndef public_node(node:\
+    \ Node) -> dict:\n    # Runtime Service/listener names are control-plane details.\
+    \  Status clients\n    # receive only publication data plus non-sensitive qualification\
+    \ signals.\n    enabled = publication_enabled(node)\n    return {\n        \"\
+    id\": node.node_id,\n        \"name\": node.name,\n        **asdict(node.publication),\n\
+    \        \"region\": node.runtime.region,\n        \"healthy\": enabled and node.runtime.healthy,\n\
+    \        \"qualifiedMbps\": node.runtime.qualified_mbps,\n        \"qualified\"\
+    : enabled and node.runtime.healthy and node.runtime.qualified_mbps >= 100,\n \
+    \   }\n\n\ndef canonical_subject(user: str | None, email: str | None, aliases:\
+    \ dict[str, str]) -> str:\n    normalized_aliases = {str(key).strip().casefold():\
+    \ str(value).strip() for key, value in aliases.items()}\n    for candidate in\
+    \ (email, user):\n        value = str(candidate or \"\").strip()\n        if value\
+    \ and value.casefold() in normalized_aliases:\n            return normalized_aliases[value.casefold()]\n\
+    \    subject = str(user or email or \"\").strip()\n    if not subject:\n     \
+    \   raise ValueError(\"Dex identity required\")\n    return subject.casefold()\n\
+    \n\ndef authorization(cache: dict, subject: str, now: int | None = None) -> dict:\n\
+    \    current = int(time.time() if now is None else now)\n    last_success = int(cache.get(\"\
+    lastSuccess\", 0) or 0)\n    if not last_success or current - last_success > AUTH_MAX_STALE_SECONDS:\n\
+    \        raise PermissionError(\"authorization cache stale\")\n    member = cache.get(\"\
+    members\", {}).get(subject)\n    if not member or not member.get(\"authorized\"\
+    ):\n        raise PermissionError(\"GitHub repository access required\")\n   \
+    \ return member\n\n\ndef b64url(raw: bytes) -> str:\n    return base64.urlsafe_b64encode(raw).decode().rstrip(\"\
+    =\")\n\n\ndef b64url_decode(value: str) -> bytes:\n    return base64.urlsafe_b64decode(value\
+    \ + \"=\" * (-len(value) % 4))\n\n\ndef issue_token(secret: bytes, subject: str,\
+    \ device: str, ttl_days: int = 90, now: int | None = None) -> str:\n    issued\
+    \ = int(now if now is not None else time.time())\n    payload = {\"sub\": subject,\
+    \ \"device\": device, \"iat\": issued, \"exp\": issued + ttl_days * 86400,\n \
+    \              \"jti\": hashlib.sha256(f\"{subject}\\0{device}\\0{issued}\\0{secrets.token_hex(8)}\"\
+    .encode()).hexdigest()[:24]}\n    body = b64url(json.dumps(payload, separators=(\"\
+    ,\", \":\"), sort_keys=True).encode())\n    signature = b64url(hmac.new(secret,\
+    \ body.encode(), hashlib.sha256).digest())\n    return f\"{body}.{signature}\"\
+    \n\n\ndef verify_token(secret: bytes, token: str, now: int | None = None) -> dict:\n\
+    \    body, signature = token.split(\".\", 1)\n    expected = b64url(hmac.new(secret,\
+    \ body.encode(), hashlib.sha256).digest())\n    if not hmac.compare_digest(signature,\
+    \ expected):\n        raise ValueError(\"invalid subscription token\")\n    payload\
+    \ = json.loads(b64url_decode(body))\n    if int(payload[\"exp\"]) <= int(now if\
+    \ now is not None else time.time()):\n        raise ValueError(\"subscription\
+    \ token expired\")\n    return payload\n\n\ndef proxy_password(secret: bytes,\
+    \ token_id: str) -> str:\n    return hmac.new(secret, f\"proxy:{token_id}\".encode(),\
+    \ hashlib.sha256).hexdigest()\n\n\ndef node_uri(node: Node, password: str) ->\
+    \ str:\n    label = quote(node.name, safe=\"\")\n    query = urlencode({\"sni\"\
+    : node.publication.sni, \"insecure\": \"0\"})\n    if node.protocol == \"anytls\"\
+    :\n        return f\"anytls://{password}@{node.server}:{node.port}/?{query}#{label}\"\
+    \n    if node.protocol == \"hysteria2\":\n        return f\"hysteria2://{password}@{node.server}:{node.port}/?{query}#{label}\"\
+    \n    raise ValueError(f\"unsupported protocol: {node.protocol}\")\n\n\ndef subscription_body(password:\
+    \ str, nodes: tuple[Node, ...] = DEFAULT_NODES) -> bytes:\n    raw = \"\\n\".join(node_uri(node,\
+    \ password) for node in published_nodes(nodes)) + \"\\n\"\n    return base64.b64encode(raw.encode())\n\
+    \n\ndef v2box_subscription_body(password: str, nodes: tuple[Node, ...] = DEFAULT_NODES)\
+    \ -> bytes:\n    \"\"\"Return only protocols V2Box can import from this service.\"\
+    \"\"\n    compatible = tuple(node for node in published_nodes(nodes) if node.protocol\
+    \ == \"hysteria2\")\n    raw = \"\\n\".join(node_uri(node, password) for node\
+    \ in compatible) + \"\\n\"\n    return base64.b64encode(raw.encode())\n\n\ndef\
+    \ mihomo_proxy(node: Node, password: str) -> list[str]:\n    p = node.publication\n\
+    \    credential_field = \"password\"\n    return [f\"  - name: {json.dumps(node.name,\
+    \ ensure_ascii=False)}\", f\"    type: {p.protocol}\",\n            f\"    server:\
+    \ {p.server}\", f\"    port: {p.port}\", f\"    {credential_field}: {json.dumps(password)}\"\
+    ,\n            f\"    sni: {p.sni}\", \"    skip-cert-verify: false\", \"    udp:\
+    \ true\"]\n\n\ndef mihomo_config(password: str, token: str, base_url: str, nodes:\
+    \ tuple[Node, ...] = DEFAULT_NODES) -> bytes:\n    active = published_nodes(nodes)\n\
+    \    names = [json.dumps(node.name, ensure_ascii=False) for node in active]\n\
+    \    preferred, backup = priority_nodes(active)\n    preferred_names = [json.dumps(node.name,\
+    \ ensure_ascii=False) for node in preferred]\n    backup_names = [json.dumps(node.name,\
+    \ ensure_ascii=False) for node in backup]\n    out = [\"mixed-port: 7890\", \"\
+    allow-lan: false\", \"mode: rule\", \"log-level: warning\", \"ipv6: false\",\n\
+    \           \"find-process-mode: strict\", \"unified-delay: true\", \"tcp-concurrent:\
+    \ true\", \"proxies:\"]\n    for node in active:\n        out.extend(mihomo_proxy(node,\
+    \ password))\n    out.extend([\"proxy-groups:\", \"  - name: PROXY\", \"    type:\
+    \ select\", \"    proxies:\", \"      - AUTO\", \"      - CODEX-STABLE\"])\n \
+    \   out.extend(f\"      - {name}\" for name in names)\n    out.extend([\"    \
+    \  - DIRECT\", \"  - name: CODEX-STABLE\", \"    type: select\", \"    proxies:\"\
+    , \"      - AUTO\",\n                \"  - name: AUTO\", \"    type: fallback\"\
+    , \"    url: https://www.gstatic.com/generate_204\",\n                \"    interval:\
+    \ 600\", \"    proxies:\", \"      - LA-PREFERRED\"])\n    out.extend(f\"    \
+    \  - {name}\" for name in backup_names)\n    out.extend([\"      - DIRECT\", \"\
+    \  - name: LA-PREFERRED\", \"    type: url-test\", \"    url: https://www.gstatic.com/generate_204\"\
+    ,\n                \"    interval: 600\", \"    tolerance: 80\", \"    proxies:\"\
+    ])\n    out.extend(f\"      - {name}\" for name in preferred_names)\n    for _rule_id,\
+    \ label in SERVICE_RULESETS:\n        if _rule_id == \"ai\":\n            choices\
+    \ = (\"CODEX-STABLE\", \"PROXY\", \"AUTO\", \"DIRECT\")\n        else:\n     \
+    \       choices = (\"DIRECT\", \"AUTO\", \"PROXY\") if _rule_id in {\"apple\"\
+    , \"microsoft\", \"speedtest\"} else (\"PROXY\", \"AUTO\", \"DIRECT\")\n     \
+    \   out.extend([f\"  - name: {label}\", \"    type: select\", \"    proxies:\"\
+    ])\n        out.extend(f\"      - {choice}\" for choice in choices)\n    rule_names\
+    \ = (\"private\", \"cn\", \"geolocation-!cn\", \"cn-ip\", \"private-ip\", \"openai\"\
+    , \"anthropic\", \"google\",\n                  \"youtube\", \"telegram\", \"\
+    netflix\", \"disney\", \"hbo\", \"spotify\", \"tiktok\", \"twitter\",\n      \
+    \            \"github\", \"gitlab\", \"apple\", \"microsoft\", \"steam\", \"category-games\"\
+    )\n    out.append(\"rule-providers:\")\n    for name in rule_names:\n        behavior\
+    \ = \"ipcidr\" if name.endswith(\"-ip\") else \"domain\"\n        out.extend([f\"\
+    \  {name}:\", \"    type: http\", f\"    behavior: {behavior}\", \"    format:\
+    \ mrs\",\n                    f\"    url: {base_url}/r/{token}/current/{name}.mrs\"\
+    , f\"    path: ./rules/{name}.mrs\", \"    interval: 86400\"])\n    out.extend([\"\
+    dns:\", \"  enable: true\", \"  ipv6: false\", \"  enhanced-mode: fake-ip\", \"\
+    \  fake-ip-range: 198.18.0.1/16\",\n                \"  default-nameserver:\"\
+    , \"    - 223.5.5.5\", \"    - 119.29.29.29\",\n                \"  proxy-server-nameserver:\"\
+    , \"    - https://dns.alidns.com/dns-query\", \"    - https://doh.pub/dns-query\"\
+    ,\n                \"  direct-nameserver:\", \"    - https://dns.alidns.com/dns-query\"\
+    , \"    - https://doh.pub/dns-query\",\n                \"  nameserver:\", \"\
+    \    - https://1.1.1.1/dns-query#PROXY\", \"    - https://dns.google/dns-query#PROXY\"\
+    ,\n                \"  nameserver-policy:\",\n                *[line for domain\
+    \ in REMOTE_CONTROL_DIRECT_DOMAINS for line in\n                  (f\"    '+.{domain}':\"\
+    , \"      - https://dns.alidns.com/dns-query\", \"      - https://doh.pub/dns-query\"\
+    )],\n                *[line for domain in CN_CLOUD_DIRECT_DOMAINS for line in\n\
+    \                  (f\"    '+.{domain}':\", \"      - https://dns.alidns.com/dns-query\"\
+    , \"      - https://doh.pub/dns-query\")],\n                \"    'rule-set:private,cn,apple,microsoft':\"\
+    , \"      - https://dns.alidns.com/dns-query\", \"      - https://doh.pub/dns-query\"\
+    ,\n                \"rules:\",\n                *[f\"  - PROCESS-NAME,{process},DIRECT\"\
+    \ for process in REMOTE_CONTROL_DIRECT_PROCESSES],\n                *[f\"  - DOMAIN-SUFFIX,{domain},DIRECT\"\
+    \ for domain in REMOTE_CONTROL_DIRECT_DOMAINS],\n                \"  - RULE-SET,private,DIRECT\"\
+    , \"  - RULE-SET,private-ip,DIRECT,no-resolve\",\n                *[f\"  - DOMAIN-SUFFIX,{domain},DIRECT\"\
+    \ for domain in CN_CLOUD_DIRECT_DOMAINS],\n                \"  - RULE-SET,apple,\U0001F34E\
+    \ Apple\", \"  - RULE-SET,microsoft,\U0001FA9F Microsoft\", \"  - RULE-SET,openai,\U0001F916\
+    \ AI\",\n                \"  - RULE-SET,anthropic,\U0001F916 AI\", \"  - RULE-SET,google,\U0001F50E\
+    \ Google / YouTube\", \"  - RULE-SET,youtube,\U0001F50E Google / YouTube\",\n\
+    \                \"  - RULE-SET,telegram,\u2708\uFE0F Telegram\", \"  - RULE-SET,netflix,\U0001F3AC\
+    \ Streaming\", \"  - RULE-SET,disney,\U0001F3AC Streaming\",\n               \
+    \ \"  - RULE-SET,hbo,\U0001F3AC Streaming\", \"  - RULE-SET,spotify,\U0001F3AC\
+    \ Streaming\", \"  - RULE-SET,tiktok,\U0001F4AC Social\",\n                \"\
+    \  - RULE-SET,twitter,\U0001F4AC Social\", \"  - RULE-SET,github,\U0001F9D1\u200D\
+    \U0001F4BB Developer\", \"  - RULE-SET,gitlab,\U0001F9D1\u200D\U0001F4BB Developer\"\
+    ,\n                \"  - RULE-SET,steam,\U0001F3AE Games\", \"  - RULE-SET,category-games,\U0001F3AE\
+    \ Games\", \"  - DOMAIN-SUFFIX,cn,DIRECT\", \"  - RULE-SET,cn,DIRECT\", \"  -\
+    \ RULE-SET,cn-ip,DIRECT,no-resolve\",\n                \"  - RULE-SET,geolocation-!cn,PROXY\"\
+    , \"  - MATCH,PROXY\", \"\"])\n    return \"\\n\".join(out).encode()\n\n\ndef\
+    \ shadowrocket_proxy(node: Node, password: str) -> str:\n    publication = node.publication\n\
+    \    common = f\"{node.name} = {publication.protocol}, {publication.server}, {publication.port}\"\
+    \n    if publication.protocol == \"anytls\":\n        return f\"{common}, password={password},\
+    \ peer={publication.sni}, udp=1\"\n    if publication.protocol == \"hysteria2\"\
+    :\n        return f\"{common}, auth={password}, peer={publication.sni}, udp=1\"\
+    \n    raise ValueError(f\"unsupported Shadowrocket protocol: {publication.protocol}\"\
+    )\n\n\ndef shadowrocket_config(password: str, token: str, base_url: str,\n   \
+    \                     nodes: tuple[Node, ...] = DEFAULT_NODES) -> bytes:\n   \
+    \ active = published_nodes(nodes)\n    names = [node.name for node in active]\n\
+    \    preferred, backup = priority_nodes(active)\n    preferred_names = [node.name\
+    \ for node in preferred]\n    backup_names = [node.name for node in backup]\n\
+    \    config_url = f\"{base_url}/s/{token}/shadowrocket.conf?v={SHADOWROCKET_PROFILE_REVISION}\"\
+    \n    lines = [\"[General]\", \"bypass-system = true\", \"ipv6 = false\", \"prefer-ipv6\
+    \ = false\",\n             \"skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12,\
+    \ 127.0.0.0/8, localhost, *.local, todesk.com, *.todesk.com\",\n             \"\
+    tun-excluded-routes = 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16,\
+    \ 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4\",\n             \"dns-server = https://1.1.1.1/dns-query,\
+    \ https://dns.google/dns-query\",\n             \"fallback-dns-server = https://dns.alidns.com/dns-query,\
+    \ https://doh.pub/dns-query\",\n             \"dns-direct-system = false\", \"\
+    dns-fallback-system = false\",\n             \"icmp-auto-reply = true\", \"private-ip-answer\
+    \ = false\",\n             f\"update-url = {config_url}\",\n             \"udp-policy-not-supported-behaviour\
+    \ = REJECT\", \"\", \"[Proxy]\"]\n    lines.extend(shadowrocket_proxy(node, password)\
+    \ for node in active)\n    lines.extend([\"\", \"[Proxy Group]\",\n          \
+    \        f\"PROXY = select, AUTO, CODEX-STABLE, {', '.join(names)}, DIRECT\",\n\
+    \                  \"CODEX-STABLE = select, AUTO\",\n                  f\"AUTO\
+    \ = fallback, LA-PREFERRED, {', '.join(backup_names + ['DIRECT'])}, interval=600,\
+    \ timeout=5, url=https://www.gstatic.com/generate_204\",\n                  f\"\
+    LA-PREFERRED = url-test, {', '.join(preferred_names)}, interval=600, tolerance=80,\
+    \ timeout=5, url=https://www.gstatic.com/generate_204\"])\n    for _rule_id, label\
+    \ in SERVICE_RULESETS:\n        if _rule_id == \"ai\":\n            choices =\
+    \ \"CODEX-STABLE, PROXY, AUTO, DIRECT\"\n        else:\n            choices =\
+    \ \"DIRECT, AUTO, PROXY\" if _rule_id in {\"apple\", \"microsoft\", \"speedtest\"\
+    } else \"PROXY, AUTO, DIRECT\"\n        lines.append(f\"{label} = select, {choices}\"\
+    )\n    lines.append(\"\U0001F6E1\uFE0F Ad Blocking = select, REJECT, DIRECT\"\
+    )\n    mapping = ((\"private\", \"DIRECT\", \"\"), (\"adblock\", \"\U0001F6E1\uFE0F\
+    \ Ad Blocking\", \"\"),\n               (\"direct-services\", \"DIRECT\", \"\"\
+    ), (\"apple\", \"\U0001F34E Apple\", \"\"),\n               (\"microsoft\", \"\
+    \U0001FA9F Microsoft\", \"\"), (\"ai\", \"\U0001F916 AI\", \"\"),\n          \
+    \     (\"google\", \"\U0001F50E Google / YouTube\", \"\"), (\"telegram\", \"\u2708\
+    \uFE0F Telegram\", \"\"),\n               (\"streaming\", \"\U0001F3AC Streaming\"\
+    , \"\"), (\"social\", \"\U0001F4AC Social\", \"\"),\n               (\"developer\"\
+    , \"\U0001F9D1\u200D\U0001F4BB Developer\", \"\"), (\"cloud\", \"\u2601\uFE0F\
+    \ Cloud Storage\", \"\"),\n               (\"speedtest\", \"\U0001F4F6 Speed Test\"\
+    , \"\"), (\"games\", \"\U0001F3AE Games\", \"\"),\n               (\"cn\", \"\
+    DIRECT\", \"\"), (\"cn-ip\", \"DIRECT\", \",no-resolve\"))\n    lines.extend([\"\
+    \", \"[Rule]\"])\n    lines.extend(f\"PROCESS-NAME,{process},DIRECT\" for process\
+    \ in REMOTE_CONTROL_DIRECT_PROCESSES)\n    lines.extend(f\"DOMAIN-SUFFIX,{domain},DIRECT\"\
+    \ for domain in REMOTE_CONTROL_DIRECT_DOMAINS)\n    lines.extend([\"DOMAIN,auth.openai.com,\U0001F916\
+    \ AI\", \"DOMAIN-SUFFIX,openai.com,\U0001F916 AI\", \"DOMAIN-SUFFIX,chatgpt.com,\U0001F916\
+    \ AI\"])\n    lines.extend(f\"DOMAIN-SUFFIX,{domain},DIRECT\" for domain in CN_CLOUD_DIRECT_DOMAINS)\n\
+    \    for rule_id, policy, option in mapping:\n        lines.append(f\"RULE-SET,{base_url}/r/{token}/current/{rule_id}.list,{policy}{option}\"\
+    )\n    lines.extend([\"DOMAIN-SUFFIX,cn,DIRECT\", \"GEOIP,CN,DIRECT,no-resolve\"\
+    , \"FINAL,PROXY\", \"\"])\n    return \"\\n\".join(lines).encode()\n\n\ndef shadowrocket_import_url(config_url:\
+    \ str) -> str:\n    # Shadowrocket's config installer takes the percent-encoded\
+    \ remote URL as\n    # the path payload. The query form may open the app without\
+    \ adding a file.\n    return \"shadowrocket://config/add/\" + quote(config_url,\
+    \ safe=\"\")\n\n\ndef v2box_subscription_import_url(subscription_url: str, name:\
+    \ str = PROFILE_TITLE) -> str:\n    return \"v2box://install-sub?\" + urlencode({\"\
+    url\": subscription_url, \"name\": name})\n\n\ndef v2box_config_import_url(config_url:\
+    \ str) -> str:\n    return \"v2box://install-config?\" + urlencode({\"url\": config_url})\n\
+    \n\ndef clash_meta_import_url(config_url: str) -> str:\n    \"\"\"Build the URL\
+    \ scheme understood by ClashX and Clash Meta clients.\"\"\"\n    return \"clash://install-config?url=\"\
+    \ + quote(config_url, safe=\"\")\n\n\ndef month_end_epoch(now: datetime | None\
+    \ = None) -> int:\n    current = now or datetime.now(timezone.utc)\n    boundary\
+    \ = datetime(current.year + (current.month == 12), 1 if current.month == 12 else\
+    \ current.month + 1, 1, tzinfo=timezone.utc)\n    return int(boundary.timestamp())\n\
+    \n\ndef subscription_headers(upload: int = 0, download: int = 0, now: datetime\
+    \ | None = None) -> dict[str, str]:\n    return {\"Subscription-Userinfo\": f\"\
+    upload={max(0, upload)}; download={max(0, download)}; total={MONTHLY_SOFT_LIMIT};\
+    \ expire={month_end_epoch(now)}\",\n            \"Profile-Title\": PROFILE_TITLE,\
+    \ \"Profile-Update-Interval\": \"6\",\n            \"Cache-Control\": \"no-store,\
+    \ no-cache, must-revalidate\", \"Pragma\": \"no-cache\", \"Expires\": \"0\"}\n"
+  rule_sync.py: "#!/usr/bin/env python3\n\"\"\"Fetch, validate, version and atomically\
+    \ promote public routing rules.\"\"\"\n\nfrom __future__ import annotations\n\n\
+    import hashlib\nimport http.client\nimport json\nimport os\nimport shutil\nimport\
+    \ time\nimport urllib.error\nimport urllib.request\nfrom pathlib import Path\n\
+    from urllib.parse import quote\n\nROOT = Path(os.getenv(\"RULES_ROOT\", \"/rules\"\
+    ))\nMETA = \"https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo\"\
+    \nBM = \"https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Shadowrocket\"\
+    \nUPSTREAM_REFS = {\n    \"MetaCubeX/meta-rules-dat\": \"meta\",\n    \"blackmatrix7/ios_rule_script\"\
+    : \"master\",\n}\nRECIPE_REVISION = 2\n\nMRS_SOURCES = {\n    **{name: f\"{META}/geosite/{name}.mrs\"\
+    \ for name in (\n        \"private\", \"cn\", \"geolocation-!cn\", \"openai\"\
+    , \"anthropic\", \"google\", \"youtube\", \"telegram\", \"netflix\",\n       \
+    \ \"disney\", \"hbo\", \"spotify\", \"tiktok\", \"twitter\", \"github\", \"gitlab\"\
+    , \"apple\", \"microsoft\", \"steam\", \"category-games\")},\n    \"cn-ip\": f\"\
+    {META}/geoip/cn.mrs\",\n    \"private-ip\": f\"{META}/geoip/private.mrs\",\n}\n\
+    \nLIST_SOURCES = {\n    \"private\": [f\"{BM}/Lan/Lan.list\"],\n    \"cn\": [f\"\
+    {BM}/ChinaMax/ChinaMax.list\"],\n    \"cn-ip\": [f\"{BM}/ChinaIPs/ChinaIPs.list\"\
+    ],\n    \"adblock\": [f\"{BM}/AdvertisingLite/AdvertisingLite.list\"],\n    \"\
+    direct-services\": [f\"{BM}/{name}/{name}.list\" for name in\n               \
+    \         (\"Alibaba\", \"Baidu\", \"BiliBili\", \"ChinaMedia\", \"Tencent\",\
+    \ \"Cloudflarecn\", \"SteamCN\")],\n    \"ai\": [f\"{BM}/{name}/{name}.list\"\
+    \ for name in (\"OpenAI\", \"Anthropic\", \"Gemini\", \"Copilot\")],\n    \"google\"\
+    : [f\"{BM}/Google/Google.list\", f\"{BM}/YouTube/YouTube.list\"],\n    \"telegram\"\
+    : [f\"{BM}/Telegram/Telegram.list\"],\n    \"streaming\": [f\"{BM}/{name}/{name}.list\"\
+    \ for name in (\"Netflix\", \"Disney\", \"HBO\", \"Spotify\", \"YouTubeMusic\"\
+    , \"BiliBiliIntl\")],\n    \"social\": [f\"{BM}/{name}/{name}.list\" for name\
+    \ in (\"TikTok\", \"Twitter\", \"Discord\", \"Reddit\", \"Whatsapp\", \"Instagram\"\
+    , \"Facebook\")],\n    \"developer\": [f\"{BM}/{name}/{name}.list\" for name in\
+    \ (\"GitHub\", \"GitLab\", \"Docker\", \"Npmjs\", \"Python\", \"Jetbrains\")],\n\
+    \    \"cloud\": [f\"{BM}/{name}/{name}.list\" for name in (\"Dropbox\", \"GoogleDrive\"\
+    , \"OneDrive\", \"iCloud\", \"Notion\", \"Slack\")],\n    \"speedtest\": [f\"\
+    {BM}/Speedtest/Speedtest.list\"],\n    \"apple\": [f\"{BM}/Apple/Apple.list\"\
+    ],\n    \"microsoft\": [f\"{BM}/Microsoft/Microsoft.list\"],\n    \"games\": [f\"\
+    {BM}/Steam/Steam.list\", f\"{BM}/Game/Game.list\", f\"{BM}/Epic/Epic.list\"],\n\
+    }\n\n\ndef github_api_raw_url(url: str) -> str | None:\n    prefix = \"https://raw.githubusercontent.com/\"\
+    \n    if not url.startswith(prefix):\n        return None\n    parts = url.removeprefix(prefix).split(\"\
+    /\", 3)\n    if len(parts) != 4:\n        return None\n    owner, repository,\
+    \ ref, path = parts\n    return (f\"https://api.github.com/repos/{quote(owner,\
+    \ safe='')}/{quote(repository, safe='')}/contents/\"\n            f\"{quote(path,\
+    \ safe='/')}?ref={quote(ref, safe='')}\")\n\n\ndef fetch(url: str) -> bytes:\n\
+    \    last_error = None\n    raw_candidate = (url, {})\n    api_url = github_api_raw_url(url)\n\
+    \    api_candidate = (api_url, {\"Accept\": \"application/vnd.github.raw+json\"\
+    }) if api_url else None\n    # Binary MRS downloads are where the current path\
+    \ exhibits truncated raw\n    # responses. Prefer GitHub's official API for those\
+    \ ~24 files while keeping\n    # the many small text lists on raw GitHub to stay\
+    \ below API rate limits.\n    if api_candidate and url.endswith(\".mrs\"):\n \
+    \       candidates = [api_candidate, raw_candidate]\n    else:\n        candidates\
+    \ = [raw_candidate] + ([api_candidate] if api_candidate else [])\n    for candidate,\
+    \ extra_headers in candidates:\n        for attempt in range(3):\n           \
+    \ headers = {\"User-Agent\": \"re8ch-rule-sync/1\", **extra_headers}\n       \
+    \     request = urllib.request.Request(candidate, headers=headers)\n         \
+    \   try:\n                with urllib.request.urlopen(request, timeout=30) as\
+    \ response:\n                    return response.read()\n            except (urllib.error.URLError,\
+    \ TimeoutError, http.client.IncompleteRead) as exc:\n                last_error\
+    \ = exc\n                if attempt < 2:\n                    time.sleep(2 **\
+    \ attempt)\n    raise RuntimeError(f\"failed to fetch rules after retries: {url}\"\
+    ) from last_error\n\n\ndef upstream_commits() -> dict:\n    commits = {}\n   \
+    \ for repository, ref in UPSTREAM_REFS.items():\n        raw = fetch(f\"https://api.github.com/repos/{repository}/commits/{ref}\"\
+    )\n        sha = str(json.loads(raw).get(\"sha\", \"\"))\n        if len(sha)\
+    \ != 40:\n            raise ValueError(f\"invalid upstream commit: {repository}\"\
+    )\n        commits[repository] = {\"ref\": ref, \"commit\": sha}\n    return commits\n\
+    \n\ndef clean_list(parts: list[bytes]) -> bytes:\n    seen, lines = set(), []\n\
+    \    for part in parts:\n        for raw in part.decode(\"utf-8-sig\").splitlines():\n\
+    \            line = raw.strip()\n            if not line or line.startswith((\"\
+    #\", \"//\")) or line in seen:\n                continue\n            seen.add(line)\n\
+    \            lines.append(line)\n    if not lines:\n        raise ValueError(\"\
+    empty rule list\")\n    return (\"\\n\".join(lines) + \"\\n\").encode()\n\n\n\
+    def mosdns_domains(raw: bytes) -> bytes:\n    domains = []\n    for line in raw.decode().splitlines():\n\
+    \        fields = [field.strip() for field in line.split(\",\")]\n        if len(fields)\
+    \ < 2:\n            continue\n        if fields[0] == \"DOMAIN\":\n          \
+    \  domains.append(f\"full:{fields[1]}\")\n        elif fields[0] == \"DOMAIN-SUFFIX\"\
+    :\n            domains.append(f\"domain:{fields[1]}\")\n    if not domains:\n\
+    \        raise ValueError(\"no MosDNS-compatible domains\")\n    return (\"\\\
+    n\".join(dict.fromkeys(domains)) + \"\\n\").encode()\n\n\ndef metric(name: str,\
+    \ raw: bytes) -> int:\n    return len(raw.splitlines()) if name.endswith(\".list\"\
+    ) else len(raw)\n\n\ndef previous_manifest() -> dict:\n    path = ROOT / \"current\"\
+    \ / \"manifest.json\"\n    return json.loads(path.read_text()) if path.exists()\
+    \ else {}\n\n\ndef verified_previous_artifact(name: str, sources: list[str], previous:\
+    \ dict) -> bytes | None:\n    metadata = previous.get(\"artifacts\", {}).get(name,\
+    \ {})\n    if metadata.get(\"sources\") != sources:\n        return None\n   \
+    \ path = ROOT / \"current\" / name\n    if not path.exists():\n        return\
+    \ None\n    raw = path.read_bytes()\n    if hashlib.sha256(raw).hexdigest() !=\
+    \ metadata.get(\"sha256\"):\n        return None\n    return raw\n\n\ndef incremental_list_parts(name:\
+    \ str, urls: list[str], previous: dict) -> tuple[list[bytes], list[str]]:\n  \
+    \  if int(previous.get(\"recipeRevision\", 1)) == RECIPE_REVISION:\n        return\
+    \ [], urls\n    filename = f\"{name}.list\"\n    old_sources = previous.get(\"\
+    artifacts\", {}).get(filename, {}).get(\"sources\", [])\n    if not old_sources\
+    \ or urls[:len(old_sources)] != old_sources:\n        return [], urls\n    raw\
+    \ = verified_previous_artifact(filename, old_sources, previous)\n    return ([raw],\
+    \ urls[len(old_sources):]) if raw is not None else ([], urls)\n\n\ndef validate_change(name:\
+    \ str, value: int, previous: dict) -> None:\n    if int(previous.get(\"recipeRevision\"\
+    , 1)) != RECIPE_REVISION:\n        return\n    old = int(previous.get(\"artifacts\"\
+    , {}).get(name, {}).get(\"metric\", 0) or 0)\n    if old and abs(value - old)\
+    \ / old > 0.25:\n        raise ValueError(f\"abnormal rule size change: {name}:\
+    \ {old} -> {value}\")\n\n\ndef sync(now: int | None = None) -> str:\n    stamp\
+    \ = time.strftime(\"%Y%m%dT%H%M%SZ\", time.gmtime(time.time() if now is None else\
+    \ now))\n    versions, stage = ROOT / \"versions\", ROOT / f\".stage-{stamp}-{os.getpid()}\"\
+    \n    versions.mkdir(parents=True, exist_ok=True)\n    stage.mkdir(parents=True)\n\
+    \    previous = previous_manifest()\n    artifacts = {}\n    try:\n        for\
+    \ name, url in MRS_SOURCES.items():\n            filename = f\"{name}.mrs\"\n\
+    \            raw = None\n            if int(previous.get(\"recipeRevision\", 1))\
+    \ != RECIPE_REVISION:\n                raw = verified_previous_artifact(filename,\
+    \ [url], previous)\n            raw = raw if raw is not None else fetch(url)\n\
+    \            if len(raw) < 128:\n                raise ValueError(f\"invalid MRS:\
+    \ {name}\")\n            value = metric(filename, raw)\n            validate_change(filename,\
+    \ value, previous)\n            (stage / filename).write_bytes(raw)\n        \
+    \    artifacts[filename] = {\"sha256\": hashlib.sha256(raw).hexdigest(), \"metric\"\
+    : value, \"sources\": [url]}\n        for name, urls in LIST_SOURCES.items():\n\
+    \            prior_parts, remaining_urls = incremental_list_parts(name, urls,\
+    \ previous)\n            raw = clean_list(prior_parts + [fetch(url) for url in\
+    \ remaining_urls])\n            filename = f\"{name}.list\"\n            value\
+    \ = metric(filename, raw)\n            validate_change(filename, value, previous)\n\
+    \            (stage / filename).write_bytes(raw)\n            artifacts[filename]\
+    \ = {\"sha256\": hashlib.sha256(raw).hexdigest(), \"metric\": value, \"sources\"\
+    : urls}\n            if name in {\"private\", \"cn\"}:\n                dns_raw\
+    \ = mosdns_domains(raw)\n                dns_name = f\"{name}-domains.txt\"\n\
+    \                (stage / dns_name).write_bytes(dns_raw)\n                artifacts[dns_name]\
+    \ = {\"sha256\": hashlib.sha256(dns_raw).hexdigest(), \"metric\": len(dns_raw.splitlines()),\
+    \ \"sources\": urls}\n        manifest = {\"version\": stamp, \"createdAt\": int(time.time()),\
+    \ \"recipeRevision\": RECIPE_REVISION,\n                    \"upstreams\": upstream_commits(),\
+    \ \"artifacts\": artifacts}\n        (stage / \"manifest.json\").write_text(json.dumps(manifest,\
+    \ indent=2, sort_keys=True) + \"\\n\")\n        destination = versions / stamp\n\
+    \        stage.rename(destination)\n        link = ROOT / \".current-new\"\n \
+    \       link.unlink(missing_ok=True)\n        link.symlink_to(destination.relative_to(ROOT),\
+    \ target_is_directory=True)\n        link.replace(ROOT / \"current\")\n      \
+    \  for old in sorted((p for p in versions.iterdir() if p.is_dir()), reverse=True)[7:]:\n\
+    \            shutil.rmtree(old)\n        return stamp\n    except Exception:\n\
+    \        shutil.rmtree(stage, ignore_errors=True)\n        raise\n\n\nif __name__\
+    \ == \"__main__\":\n    print(sync())\n"
+  telemetry.py: "#!/usr/bin/env python3\n\"\"\"Aggregate Mihomo connection counters\
+    \ by authenticated inbound user.\"\"\"\n\nfrom __future__ import annotations\n\
+    \nimport json\nimport os\nimport ssl\nimport time\nimport urllib.error\nimport\
+    \ urllib.request\nfrom datetime import datetime, timezone\nfrom pathlib import\
+    \ Path\n\nNAMESPACE = os.getenv(\"POD_NAMESPACE\", \"egress-fabric\")\nUSAGE_NAME\
+    \ = os.getenv(\"USAGE_CONFIGMAP\", \"access-device-usage\")\nREGION = os.getenv(\"\
+    ACCESS_REGION\", \"unknown\")\nCONTROLLER = os.getenv(\"MIHOMO_CONTROLLER\", \"\
+    http://127.0.0.1:9090\")\nCONTROLLER_SECRET_PATH = Path(os.getenv(\"MIHOMO_CONTROLLER_SECRET_PATH\"\
+    , \"/controller/secret\"))\n\n\ndef kube_request(method: str, path: str, body:\
+    \ dict | None = None) -> dict:\n    host, port = os.environ[\"KUBERNETES_SERVICE_HOST\"\
+    ], os.environ[\"KUBERNETES_SERVICE_PORT_HTTPS\"]\n    token = Path(\"/var/run/secrets/kubernetes.io/serviceaccount/token\"\
+    ).read_text().strip()\n    raw = json.dumps(body).encode() if body is not None\
+    \ else None\n    request = urllib.request.Request(f\"https://{host}:{port}{path}\"\
+    , data=raw, method=method,\n                                     headers={\"Authorization\"\
+    : f\"Bearer {token}\", \"Content-Type\": \"application/json\"})\n    context =\
+    \ ssl.create_default_context(cafile=\"/var/run/secrets/kubernetes.io/serviceaccount/ca.crt\"\
+    )\n    with urllib.request.urlopen(request, context=context, timeout=5) as response:\n\
+    \        return json.load(response) if response.length != 0 else {}\n\n\ndef connections()\
+    \ -> list[dict]:\n    secret = CONTROLLER_SECRET_PATH.read_text().strip()\n  \
+    \  request = urllib.request.Request(f\"{CONTROLLER}/connections\", headers={\"\
+    Authorization\": f\"Bearer {secret}\"})\n    with urllib.request.urlopen(request,\
+    \ timeout=3) as response:\n        return json.load(response).get(\"connections\"\
+    , [])\n\n\ndef accumulate(state: dict, snapshot: list[dict], now: int | None =\
+    \ None) -> dict:\n    timestamp = int(time.time() if now is None else now)\n \
+    \   month = datetime.fromtimestamp(timestamp, timezone.utc).strftime(\"%Y-%m\"\
+    )\n    if state.get(\"month\") != month:\n        state = {\"month\": month, \"\
+    connections\": {}, \"devices\": {}}\n    old_connections = state.setdefault(\"\
+    connections\", {})\n    devices = state.setdefault(\"devices\", {})\n    active\
+    \ = {}\n    for connection in snapshot:\n        metadata = connection.get(\"\
+    metadata\", {})\n        user = str(metadata.get(\"inboundUser\", \"\")).strip()\n\
+    \        connection_id = str(connection.get(\"id\", \"\")).strip()\n        if\
+    \ not user or not connection_id:\n            continue\n        upload, download\
+    \ = int(connection.get(\"upload\", 0)), int(connection.get(\"download\", 0))\n\
+    \        previous = old_connections.get(connection_id, {})\n        item = devices.setdefault(user,\
+    \ {\"upload\": 0, \"download\": 0})\n        item[\"upload\"] = int(item.get(\"\
+    upload\", 0)) + max(0, upload - int(previous.get(\"upload\", 0)))\n        item[\"\
+    download\"] = int(item.get(\"download\", 0)) + max(0, download - int(previous.get(\"\
+    download\", 0)))\n        item[\"lastSeenAt\"] = timestamp\n        item[\"activeConnections\"\
+    ] = int(item.get(\"activeConnections\", 0)) + 1\n        active[connection_id]\
+    \ = {\"upload\": upload, \"download\": download, \"user\": user, \"seenAt\": timestamp}\n\
+    \    for item in devices.values():\n        item[\"activeConnections\"] = 0\n\
+    \    for item in active.values():\n        devices[item[\"user\"]][\"activeConnections\"\
+    ] += 1\n    state[\"connections\"] = active\n    state[\"updatedAt\"] = timestamp\n\
+    \    return state\n\n\ndef persist(snapshot: list[dict], attempts: int = 5) ->\
+    \ None:\n    key = f\"usage-{REGION}.json\"\n    for _ in range(attempts):\n \
+    \       item = kube_request(\"GET\", f\"/api/v1/namespaces/{NAMESPACE}/configmaps/{USAGE_NAME}\"\
+    )\n        data = item.get(\"data\", {})\n        state = json.loads(data.get(key,\
+    \ \"{}\"))\n        item[\"data\"] = {**data, key: json.dumps(accumulate(state,\
+    \ snapshot), separators=(\",\", \":\"), sort_keys=True)}\n        item.pop(\"\
+    status\", None)\n        try:\n            kube_request(\"PUT\", f\"/api/v1/namespaces/{NAMESPACE}/configmaps/{USAGE_NAME}\"\
+    , item)\n            return\n        except urllib.error.HTTPError as exc:\n \
+    \           if exc.code != 409:\n                raise\n    raise RuntimeError(\"\
+    usage state update conflict\")\n\n\nif __name__ == \"__main__\":\n    while True:\n\
+    \        try:\n            persist(connections())\n        except Exception as\
+    \ exc:\n            print(json.dumps({\"level\": \"warning\", \"event\": \"telemetry-poll-failed\"\
+    , \"error\": type(exc).__name__}), flush=True)\n        time.sleep(5)\n"
+kind: ConfigMap
+metadata:
+  name: access-subscription-code-9b5k4f4ddb
+  namespace: egress-fabric
+---
+apiVersion: v1
+data:
+  config.yaml: "allow-lan: false\nmode: rule\nlog-level: warning\nproxies:\n  - {name:\
+    \ NODE-SMART-EGRESS, type: socks5, server: 127.0.0.1, port: 17891, udp: true}\n\
+    listeners:\n  - name: edge-access-anytls\n    type: anytls\n    listen: 0.0.0.0\n\
+    \    port: 24443\n    users:\n__ANYTLS_USERS__\n    certificate: /etc/mihomo/tls/tls.crt\n\
+    \    private-key:\n      /etc/mihomo/tls/tls.key\n    proxy: NODE-SMART-EGRESS\n\
+    rules: [\"MATCH,NODE-SMART-EGRESS\"]\n"
+kind: ConfigMap
+metadata:
+  name: edge-access-anytls
+  namespace: egress-fabric
+---
+apiVersion: v1
+data:
+  config.yaml: "allow-lan: false\nmode: rule\nlog-level: warning\nexternal-controller:\
+    \ 127.0.0.1:9090\nsecret: __CONTROLLER_SECRET__\nproxies:\n  - {name: NODE-SMART-EGRESS,\
+    \ type: socks5, server: identity-egress.egress-fabric.svc.cluster.local, port:\
+    \ 17893, udp: true}\nlisteners:\n  - name: access-anytls\n    type: anytls\n \
+    \   listen: 0.0.0.0\n    port: 24443\n    users:\n__ANYTLS_USERS__\n    certificate:\
+    \ /etc/mihomo/tls/tls.crt\n    private-key:\n      /etc/mihomo/tls/tls.key\n \
+    \   proxy: NODE-SMART-EGRESS\n  - name: access-hysteria2\n    type: hysteria2\n\
+    \    listen: 0.0.0.0\n    port: 24444\n    users:\n__HYSTERIA2_USERS__\n    up:\
+    \ 1000\n    down: 1000\n    certificate: /etc/mihomo/tls/tls.crt\n    private-key:\n\
+    \      /etc/mihomo/tls/tls.key\n    proxy: NODE-SMART-EGRESS\nrules: [\"MATCH,NODE-SMART-EGRESS\"\
+    ]\n"
+kind: ConfigMap
+metadata:
+  name: personal-access-mihomo
+  namespace: egress-fabric
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: access-adguard-data
+  namespace: egress-fabric
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: rbd-r640
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    storage.re8ch.com/replicated-approved: 'true'
+  name: access-rule-cache
+  namespace: egress-fabric
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: cephfs-re8ch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    lbipam.cilium.io/ips: 10.251.0.12
+  labels:
+    networking.re8ch.com/bgp-advertise: enabled
+    networking.re8ch.com/lb-pool: service-vip
+  name: access-dns
+  namespace: egress-fabric
+spec:
+  externalTrafficPolicy: Local
+  loadBalancerClass: io.cilium/bgp-control-plane
+  ports:
+  - name: dns-udp
+    port: 53
+    protocol: UDP
+    targetPort: dns-udp
+  - name: dns-tcp
+    port: 53
+    protocol: TCP
+    targetPort: dns-tcp
+  selector:
+    app.kubernetes.io/name: access-adguard
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: access-dns-admin
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: http
+    port: 3000
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: access-adguard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 18081
+  selector:
+    app.kubernetes.io/name: access-subscription
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosdns
+  namespace: egress-fabric
+spec:
+  clusterIP: 10.43.66.51
+  internalTrafficPolicy: Local
+  ports:
+  - name: dns-udp
+    port: 5353
+    protocol: UDP
+    targetPort: dns-udp
+  - name: dns-tcp
+    port: 5353
+    protocol: TCP
+    targetPort: dns-tcp
+  selector:
+    app.kubernetes.io/name: mosdns
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy-access-dns
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: http
+    port: 4180
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: oauth2-proxy-access-dns
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: personal-access-auto
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: anytls
+    port: 24443
+    protocol: TCP
+    targetPort: anytls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    lbipam.cilium.io/ips: 10.251.0.11
+  labels:
+    networking.re8ch.com/bgp-advertise: enabled
+    networking.re8ch.com/lb-pool: service-vip
+  name: personal-access-hysteria2
+  namespace: egress-fabric
+spec:
+  externalTrafficPolicy: Cluster
+  loadBalancerClass: io.cilium/bgp-control-plane
+  ports:
+  - name: hysteria2
+    port: 443
+    protocol: UDP
+    targetPort: hysteria2
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    lbipam.cilium.io/ips: 10.251.0.14
+  labels:
+    networking.re8ch.com/bgp-advertise: enabled
+    networking.re8ch.com/lb-pool: service-vip
+  name: personal-access-hysteria2-my-kul
+  namespace: egress-fabric
+spec:
+  externalTrafficPolicy: Cluster
+  loadBalancerClass: io.cilium/bgp-control-plane
+  ports:
+  - name: hysteria2
+    port: 4444
+    protocol: UDP
+    targetPort: 24444
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    lbipam.cilium.io/ips: 10.251.0.13
+  labels:
+    networking.re8ch.com/bgp-advertise: enabled
+    networking.re8ch.com/lb-pool: service-vip
+  name: personal-access-hysteria2-us-la
+  namespace: egress-fabric
+spec:
+  externalTrafficPolicy: Cluster
+  loadBalancerClass: io.cilium/bgp-control-plane
+  ports:
+  - name: hysteria2
+    port: 4443
+    protocol: UDP
+    targetPort: 24444
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: personal-access-my-kul
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: anytls
+    port: 24443
+    protocol: TCP
+    targetPort: anytls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: personal-access-us-ca
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: anytls
+    port: 24443
+    protocol: TCP
+    targetPort: anytls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: personal-access-us-la
+  namespace: egress-fabric
+spec:
+  ports:
+  - name: anytls
+    port: 24443
+    protocol: TCP
+    targetPort: anytls
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: access-controller
+  namespace: egress-fabric
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 179.255.126.104
+  conditions:
+    ready: true
+  zone: us-la
+- addresses:
+  - 198.20.153.89
+  conditions:
+    ready: true
+  zone: my-kul
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-auto
+  name: personal-access-auto-public
+  namespace: egress-fabric
+ports:
+- name: anytls
+  port: 24443
+  protocol: TCP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 198.20.153.89
+  conditions:
+    ready: true
+  zone: my-kul
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-hysteria2-my-kul
+  name: personal-access-hysteria2-my-kul-public
+  namespace: egress-fabric
+ports:
+- name: hysteria2
+  port: 24444
+  protocol: UDP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 179.255.126.104
+  conditions:
+    ready: true
+  zone: us-la
+- addresses:
+  - 198.20.153.89
+  conditions:
+    ready: true
+  zone: my-kul
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-hysteria2
+  name: personal-access-hysteria2-public
+  namespace: egress-fabric
+ports:
+- name: hysteria2
+  port: 24444
+  protocol: UDP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 179.255.126.104
+  conditions:
+    ready: true
+  zone: us-la
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-hysteria2-us-la
+  name: personal-access-hysteria2-us-la-public
+  namespace: egress-fabric
+ports:
+- name: hysteria2
+  port: 24444
+  protocol: UDP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 198.20.153.89
+  conditions:
+    ready: true
+  zone: my-kul
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-my-kul
+  name: personal-access-my-kul-public
+  namespace: egress-fabric
+ports:
+- name: anytls
+  port: 24443
+  protocol: TCP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 179.255.126.104
+  conditions:
+    ready: true
+  zone: us-la
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-us-ca
+  name: personal-access-us-ca-public
+  namespace: egress-fabric
+ports:
+- name: anytls
+  port: 24443
+  protocol: TCP
+---
+addressType: IPv4
+apiVersion: discovery.k8s.io/v1
+endpoints:
+- addresses:
+  - 179.255.126.104
+  conditions:
+    ready: true
+  zone: us-la
+kind: EndpointSlice
+metadata:
+  labels:
+    kubernetes.io/service-name: personal-access-us-la
+  name: personal-access-us-la-public
+  namespace: egress-fabric
+ports:
+- name: anytls
+  port: 24443
+  protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: access-dns-admin
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - dns.access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-dns-https
+  rules:
+  - backendRefs:
+    - name: oauth2-proxy-access-dns
+      port: 4180
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - sub.access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-sub-https
+  rules:
+  - backendRefs:
+    - name: access-subscription
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+    networking.re8ch.com/tls-mode: passthrough
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-anytls
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-tls
+  rules:
+  - backendRefs:
+    - name: personal-access-auto
+      port: 24443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: access-anytls-my-kul
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - my-kul.access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-my-kul-tls
+  rules:
+  - backendRefs:
+    - name: personal-access-my-kul
+      port: 24443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: access-anytls-us-ca
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - us-ca.access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-us-ca-tls
+  rules:
+  - backendRefs:
+    - name: personal-access-us-ca
+      port: 24443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: access-anytls-us-la
+  namespace: egress-fabric
+spec:
+  hostnames:
+  - route-la.access.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: access-us-la-tls
+  rules:
+  - backendRefs:
+    - name: personal-access-us-la
+      port: 24443
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: direct-ca.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 179.255.126.104
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-direct-ca-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: direct-ca.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: direct-cn.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-direct-cn-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: direct-cn.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: direct-kl.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 198.20.153.89
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-direct-kl-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: direct-kl.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: direct-la.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 179.255.126.104
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-direct-la-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: direct-la.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: dns.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-dns-admin-record
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: dns.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: us-ca.access.re8ch.com,backup.access.re8ch.com,sub.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-hysteria2-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: us-ca.access.re8ch.com
+  - host: backup.access.re8ch.com
+  - host: sub.access.re8ch.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: route-la.access.re8ch.com,route-kl.access.re8ch.com,my-kul.access.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+  labels:
+    public.re8ch.com/external-dns: enabled
+  name: access-route-expansion-dns
+  namespace: egress-fabric
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: route-la.access.re8ch.com
+  - host: route-kl.access.re8ch.com
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: access-subscription
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mosdns
+  namespace: egress-fabric
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mosdns
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: access-controller
+  namespace: egress-fabric
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ''
+  resources:
+  - secrets
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - apps
+  resourceNames:
+  - edge-access-anytls
+  resources:
+  - daemonsets
+  verbs:
+  - get
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: access-telemetry
+  namespace: egress-fabric
+rules:
+- apiGroups:
+  - ''
+  resourceNames:
+  - access-device-usage
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: access-controller
+  namespace: egress-fabric
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: access-controller
+subjects:
+- kind: ServiceAccount
+  name: access-controller
+  namespace: egress-fabric
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: access-subscription
+  namespace: egress-fabric
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: access-subscription
+subjects:
+- kind: ServiceAccount
+  name: access-subscription
+  namespace: egress-fabric
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: access-telemetry
+  namespace: egress-fabric
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: access-telemetry
+subjects:
+- kind: ServiceAccount
+  name: access-telemetry

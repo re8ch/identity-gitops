@@ -1,0 +1,38 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: allow-db-rw-auth-route-to-tenant-api
+  namespace: tenant-infrastructure
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: supabase-identity
+  to:
+  - group: ''
+    kind: Service
+    name: tenant-api
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: identity-dependency-preflight
+  namespace: tenant-infrastructure
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: auth
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: re8ch-auth-gateway
+    ports:
+    - port: 19447
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: tenant-control-controller
+  policyTypes:
+  - Ingress

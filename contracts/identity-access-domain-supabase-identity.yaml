@@ -1,0 +1,116 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-supabase-identity
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: supabase-identity
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-supabase-identity
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-domain-supabase-identity
+    resources:
+    - apps/Deployment
+    - batch/Job
+    - core/ConfigMap
+    - core/ResourceQuota
+    - core/Service
+    - gateway.networking.k8s.io/HTTPRoute
+    - gateway.networking.k8s.io/ReferenceGrant
+    - networking.k8s.io/Ingress
+    objectNames:
+    - allow-auth-route-to-supabase-auth
+    - identity-avatar-worker
+    - re8ch-supabase-auth-db-rw
+    - supabase-identity
+    - supabase-identity-auth
+    - supabase-identity-broker-groups-v2
+    - supabase-identity-data-db-ro
+    - supabase-identity-data-db-rw
+    - supabase-identity-env
+    - supabase-identity-kong
+    - supabase-identity-kong-config
+    - supabase-identity-meta
+    - supabase-identity-privacy-v1
+    - supabase-identity-quota
+    - supabase-identity-realtime
+    - supabase-identity-rest
+    - supabase-identity-rest-ro
+    - supabase-identity-studio
+    - supabase-identity-studio-dns
+    - supabase-identity-studio-http-redirect
+    - supabase-identity-studio-public
+    - supabase-multi-organization-memberships-v1
+    - supabase-oauth-client-tenant-mcp-v1
+    - supabase-oauth-clients-access-subscription-v1
+    - supabase-oauth-clients-anycam-v1
+    - supabase-oauth-clients-catalog-v1
+    - supabase-oauth-clients-headlamp-v2
+    - supabase-oauth-clients-stalwart-v1
+    - supabase-platform-admin-api-v5
+    - supabase-tenant-runtime-contexts-v4
+    - supabase-tenant-runtime-memberships-v1
+    allowClusterScoped: false
+    forceConflictObjects:
+    - apps/Deployment/supabase-identity/identity-avatar-worker
+    - apps/Deployment/supabase-identity/supabase-identity-auth
+    - apps/Deployment/supabase-identity/supabase-identity-realtime
+    - apps/Deployment/supabase-identity/supabase-identity-rest
+    - apps/Deployment/supabase-identity/supabase-identity-rest-ro
+    - batch/Job/supabase-identity/supabase-identity-privacy-v1
+    - batch/Job/supabase-identity/supabase-platform-admin-api-v5
+    - core/ConfigMap/supabase-identity/supabase-identity-broker-groups-v2
+    - core/ConfigMap/supabase-identity/supabase-identity-env
+    - core/ConfigMap/supabase-identity/supabase-identity-kong-config
+    - core/ConfigMap/supabase-identity/supabase-identity-privacy-v1
+    - core/ConfigMap/supabase-identity/supabase-multi-organization-memberships-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-client-tenant-mcp-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-access-subscription-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-anycam-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-catalog-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-headlamp-v2
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-stalwart-v1
+    - core/ConfigMap/supabase-identity/supabase-platform-admin-api-v5
+    - core/ConfigMap/supabase-identity/supabase-tenant-runtime-contexts-v4
+    - core/ConfigMap/supabase-identity/supabase-tenant-runtime-memberships-v1
+    - core/ResourceQuota/supabase-identity/supabase-identity-quota
+    - core/Service/supabase-identity/supabase-identity
+    - core/Service/supabase-identity/supabase-identity-auth
+    - core/Service/supabase-identity/supabase-identity-kong
+    - core/Service/supabase-identity/supabase-identity-meta
+    - core/Service/supabase-identity/supabase-identity-realtime
+    - core/Service/supabase-identity/supabase-identity-rest
+    - core/Service/supabase-identity/supabase-identity-rest-ro
+    - core/Service/supabase-identity/supabase-identity-studio
+    - gateway.networking.k8s.io/HTTPRoute/supabase-identity/re8ch-supabase-auth-db-rw
+    - gateway.networking.k8s.io/HTTPRoute/supabase-identity/supabase-identity-data-db-ro
+    - gateway.networking.k8s.io/HTTPRoute/supabase-identity/supabase-identity-data-db-rw
+    - gateway.networking.k8s.io/HTTPRoute/supabase-identity/supabase-identity-studio-http-redirect
+    - gateway.networking.k8s.io/HTTPRoute/supabase-identity/supabase-identity-studio-public
+    - gateway.networking.k8s.io/ReferenceGrant/supabase-identity/allow-auth-route-to-supabase-auth
+    - networking.k8s.io/Ingress/supabase-identity/supabase-identity-studio-dns
+  inventory:
+    digest: sha256:fdb21be524583fd1bc967c4918abd8c95a99b91ad25b412ce2b4a946b6789e37
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

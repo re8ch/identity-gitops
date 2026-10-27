@@ -1,0 +1,14 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stalwart-mailbox-provisioner
+  namespace: git-workspaces
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mailbox-provisioner
+subjects:
+- kind: ServiceAccount
+  name: stalwart-mailbox-provisioner
+  namespace: mail-system

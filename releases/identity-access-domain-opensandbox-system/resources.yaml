@@ -1,0 +1,160 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensandbox-orchestra-proxy
+  namespace: opensandbox-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opensandbox-orchestra-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opensandbox-orchestra-proxy
+    spec:
+      containers:
+      - command:
+        - python3
+        - /runtime/proxy.py
+        env:
+        - name: OPEN_SANDBOX_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: api-key
+              name: opensandbox-api-key
+        - name: TEABLE_INFRA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: teable-api-key
+              name: teable-infra-api-key
+        image: python:3.13-alpine@sha256:540c7d91f98ff6880174c40e99067bf5941eb54d818a7a5e094d188b196a934d
+        name: proxy
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 100m
+            memory: 96Mi
+          requests:
+            cpu: 5m
+            memory: 24Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /runtime
+          name: runtime
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      volumes:
+      - configMap:
+          name: opensandbox-orchestra-proxy
+        name: runtime
+---
+apiVersion: v1
+data:
+  proxy.py: "import http.server\nimport json\nimport os\nimport urllib.error\nimport\
+    \ urllib.request\n\nUPSTREAM = \"http://opensandbox-server.opensandbox-system.svc.cluster.local:8080\"\
+    \nAPI_KEY = os.environ[\"OPEN_SANDBOX_API_KEY\"]\nMETADATA_KEY = os.environ[\"\
+    TEABLE_INFRA_API_KEY\"]\nMETADATA_URL = \"http://teable-infra.opensandbox-system.svc.cluster.local:8080\"\
+    \nTENANT_TOOL_URL = \"https://tools.re8ch.com/tenant/mcp\"\n\nclass Handler(http.server.BaseHTTPRequestHandler):\n\
+    \    def forward(self):\n        length = int(self.headers.get(\"Content-Length\"\
+    , \"0\"))\n        body = self.rfile.read(length) if length else None\n      \
+    \  if self.command == \"POST\" and self.path.rstrip(\"/\") == \"/v1/sandboxes\"\
+    \ and body:\n            create = json.loads(body)\n            metadata = create.setdefault(\"\
+    metadata\", {})\n            environment = create.setdefault(\"env\", {})\n  \
+    \          context = {\n                \"tenantRef\": self.headers.get(\"X-RE8CH-Tenant\"\
+    ),\n                \"resourceRef\": self.headers.get(\"X-RE8CH-Resource\"),\n\
+    \                \"toolResourceRef\": self.headers.get(\"X-RE8CH-Tool-Resource\"\
+    ),\n                \"taskId\": self.headers.get(\"X-RE8CH-Task\"),\n        \
+    \        \"traceId\": self.headers.get(\"X-RE8CH-Trace\"),\n            }\n  \
+    \          metadata.update({key: value for key, value in context.items() if value})\n\
+    \            environment.update({\n                \"RE8CH_TENANT_REF\": context[\"\
+    tenantRef\"] or \"\",\n                \"RE8CH_RESOURCE_REF\": context[\"resourceRef\"\
+    ] or \"\",\n                \"RE8CH_TOOL_RESOURCE_REF\": context[\"toolResourceRef\"\
+    ] or \"\",\n                \"RE8CH_TENANT_TOOL_URL\": TENANT_TOOL_URL,\n    \
+    \            \"RE8CH_TASK_ID\": context[\"taskId\"] or \"\",\n               \
+    \ \"RE8CH_TRACE_ID\": context[\"traceId\"] or \"\",\n            })\n        \
+    \    body = json.dumps(create, separators=(\",\", \":\")).encode()\n        headers\
+    \ = {\"Accept\": \"application/json\", \"OPEN-SANDBOX-API-KEY\": API_KEY}\n  \
+    \      if self.headers.get(\"Content-Type\"):\n            headers[\"Content-Type\"\
+    ] = self.headers[\"Content-Type\"]\n        request = urllib.request.Request(UPSTREAM\
+    \ + self.path, data=body, method=self.command, headers=headers)\n        try:\n\
+    \            response = urllib.request.urlopen(request, timeout=60)\n        except\
+    \ urllib.error.HTTPError as error:\n            response = error\n        payload\
+    \ = response.read()\n        if self.command == \"POST\" and self.path.rstrip(\"\
+    /\") == \"/v1/sandboxes\" and 200 <= response.status < 300:\n            try:\n\
+    \                result = json.loads(payload)\n                sandbox_id = result.get(\"\
+    id\") or (result.get(\"data\") or {}).get(\"id\")\n                metadata =\
+    \ {\n                    \"tenantRef\": self.headers.get(\"X-RE8CH-Tenant\"),\n\
+    \                    \"resourceRef\": self.headers.get(\"X-RE8CH-Resource\"),\n\
+    \                    \"toolResourceRef\": self.headers.get(\"X-RE8CH-Tool-Resource\"\
+    ),\n                    \"taskId\": self.headers.get(\"X-RE8CH-Task\"),\n    \
+    \                \"traceId\": self.headers.get(\"X-RE8CH-Trace\"),\n         \
+    \       }\n                metadata = {key: value for key, value in metadata.items()\
+    \ if value}\n                if sandbox_id and metadata:\n                   \
+    \ request = urllib.request.Request(\n                        f\"{METADATA_URL}/api/internal/sandboxes/{sandbox_id}/metadata\"\
+    ,\n                        data=json.dumps(metadata).encode(), method=\"PUT\"\
+    ,\n                        headers={\"Authorization\": f\"Bearer {METADATA_KEY}\"\
+    , \"Content-Type\": \"application/json\"},\n                    )\n          \
+    \          urllib.request.urlopen(request, timeout=10).read()\n            except\
+    \ (KeyError, TypeError, ValueError, urllib.error.URLError):\n                pass\n\
+    \        self.send_response(response.status)\n        self.send_header(\"Content-Type\"\
+    , response.headers.get(\"Content-Type\", \"application/json\"))\n        self.send_header(\"\
+    Content-Length\", str(len(payload)))\n        self.end_headers()\n        self.wfile.write(payload)\n\
+    \n    def do_GET(self):\n        if self.path == \"/health\":\n            payload\
+    \ = b'{\"status\":\"ok\"}'\n            self.send_response(200)\n            self.send_header(\"\
+    Content-Type\", \"application/json\")\n            self.send_header(\"Content-Length\"\
+    , str(len(payload)))\n            self.end_headers()\n            self.wfile.write(payload)\n\
+    \            return\n        self.forward()\n\n    do_POST = do_PUT = do_PATCH\
+    \ = do_DELETE = forward\n    def log_message(self, *_): pass\n\nhttp.server.ThreadingHTTPServer((\"\
+    0.0.0.0\", 8080), Handler).serve_forever()\n"
+kind: ConfigMap
+metadata:
+  name: opensandbox-orchestra-proxy
+  namespace: opensandbox-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensandbox-orchestra-proxy
+  namespace: opensandbox-system
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: opensandbox-orchestra-proxy
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opensandbox-orchestra-proxy
+  namespace: opensandbox-system
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ai-operations
+    ports:
+    - port: 8080
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensandbox-orchestra-proxy
+  policyTypes:
+  - Ingress

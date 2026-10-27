@@ -1,0 +1,1747 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: identity-avatar-worker
+  name: identity-avatar-worker
+  namespace: supabase-identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: identity-avatar-worker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: identity-avatar-worker
+    spec:
+      containers:
+      - env:
+        - name: IDENTITY_RW_URL
+          value: https://db-rw.re8ch.com/identity/rest/v1
+        - name: IDENTITY_AVATAR_COS_BUCKET
+          value: re8ch-avatars-1301339749
+        - name: IDENTITY_AVATAR_COS_REGION
+          value: ap-guangzhou
+        - name: AVATAR_CPU_THREADS
+          value: '2'
+        - name: HF_HOME
+          value: /tmp/hf
+        - name: IDENTITY_PGRST_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: supabase-identity-secrets
+        - name: IDENTITY_AVATAR_COS_SECRET_ID
+          valueFrom:
+            secretKeyRef:
+              key: AVATAR_COS_SECRET_ID
+              name: supabase-identity-secrets
+        - name: IDENTITY_AVATAR_COS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              key: AVATAR_COS_SECRET_KEY
+              name: supabase-identity-secrets
+        image: registry.re8ch.com/auth/identity-avatar-worker:20260929@sha256:f31e20ca87506c14276036abb7459ea34cda67458033655ad2fb92d55b19fef4
+        imagePullPolicy: IfNotPresent
+        name: worker
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4Gi
+          requests:
+            cpu: 500m
+            memory: 2Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp
+          name: temp
+      imagePullSecrets:
+      - name: supabase-identity-harbor-pull
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      volumes:
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: temp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-identity-auth
+  namespace: supabase-identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: auth
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        identity.re8ch.com/passkey-config-revision: '20260927'
+        networking.re8ch.com/auth-external-url-revision: db-rw-20260927
+      labels:
+        app.kubernetes.io/component: auth
+        app.kubernetes.io/part-of: supabase-identity
+    spec:
+      containers:
+      - env:
+        - name: GOTRUE_API_HOST
+          value: 0.0.0.0
+        - name: GOTRUE_API_PORT
+          value: '9999'
+        - name: GOTRUE_API_MAX_REQUEST_DURATION
+          value: 30s
+        - name: HTTPS_PROXY
+          value: http://mihomos-node-cn-local.egress-fabric.svc.cluster.local:17891
+        - name: HTTP_PROXY
+          value: http://mihomos-node-cn-local.egress-fabric.svc.cluster.local:17891
+        - name: NO_PROXY
+          value: localhost,127.0.0.1,::1,.svc,.cluster.local,id.re8ch.com,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+        - name: GOTRUE_DB_DRIVER
+          value: postgres
+        - name: GOTRUE_DB_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: GOTRUE_DB_DATABASE_URL
+              name: supabase-identity-secrets
+        - name: GOTRUE_SITE_URL
+          valueFrom:
+            configMapKeyRef:
+              key: SITE_URL
+              name: supabase-identity-env
+        - name: GOTRUE_URI_ALLOW_LIST
+          valueFrom:
+            configMapKeyRef:
+              key: ADDITIONAL_REDIRECT_URLS
+              name: supabase-identity-env
+        - name: GOTRUE_DISABLE_SIGNUP
+          valueFrom:
+            configMapKeyRef:
+              key: DISABLE_SIGNUP
+              name: supabase-identity-env
+        - name: GOTRUE_JWT_ADMIN_ROLES
+          value: service_role
+        - name: GOTRUE_JWT_AUD
+          value: authenticated
+        - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+          value: authenticated
+        - name: GOTRUE_JWT_EXP
+          valueFrom:
+            configMapKeyRef:
+              key: JWT_EXPIRY
+              name: supabase-identity-env
+        - name: GOTRUE_SESSIONS_TIMEBOX
+          value: 168h
+        - name: GOTRUE_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_JWT_ISSUER
+          valueFrom:
+            configMapKeyRef:
+              key: API_EXTERNAL_URL
+              name: supabase-identity-env
+        - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: ENABLE_EMAIL_SIGNUP
+              name: supabase-identity-env
+        - name: GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED
+          value: 'false'
+        - name: GOTRUE_HOOK_SEND_EMAIL_ENABLED
+          value: 'true'
+        - name: GOTRUE_HOOK_SEND_EMAIL_URI
+          value: https://api.re8ch.com/auth/v2/send-email-hook
+        - name: GOTRUE_HOOK_SEND_EMAIL_SECRETS
+          valueFrom:
+            secretKeyRef:
+              key: SEND_EMAIL_HOOK_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_HOOK_SEND_SMS_ENABLED
+          value: 'true'
+        - name: GOTRUE_HOOK_SEND_SMS_URI
+          value: https://api.re8ch.com/auth/v2/send-sms-hook
+        - name: GOTRUE_HOOK_SEND_SMS_SECRETS
+          valueFrom:
+            secretKeyRef:
+              key: SEND_SMS_HOOK_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_GITHUB_ENABLED
+          value: 'true'
+        - name: GOTRUE_EXTERNAL_GITHUB_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: GITHUB_OAUTH_CLIENT_ID
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_GITHUB_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: GITHUB_OAUTH_CLIENT_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI
+          value: https://auth.re8ch.com/auth/v1/callback
+        - name: GOTRUE_EXPERIMENTAL_PROVIDER_LINKING_DOMAINS
+          value: github=github,google=google,apple=apple
+        - name: GOTRUE_SECURITY_MANUAL_LINKING_ENABLED
+          value: 'true'
+        - name: GOTRUE_EXTERNAL_GOOGLE_ENABLED
+          value: 'true'
+        - name: GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: GOOGLE_OIDC_CLIENT_ID
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_GOOGLE_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: GOOGLE_OIDC_CLIENT_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI
+          value: https://api.re8ch.com/auth/callback/google
+        - name: GOTRUE_EXTERNAL_APPLE_ENABLED
+          value: 'true'
+        - name: GOTRUE_EXTERNAL_APPLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              key: APPLE_OIDC_CLIENT_ID
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_APPLE_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: APPLE_OIDC_CLIENT_SECRET
+              name: supabase-identity-secrets
+        - name: GOTRUE_EXTERNAL_APPLE_REDIRECT_URI
+          value: https://api.re8ch.com/auth/callback/apple
+        - name: GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: ENABLE_ANONYMOUS_USERS
+              name: supabase-identity-env
+        - name: GOTRUE_MAILER_AUTOCONFIRM
+          valueFrom:
+            configMapKeyRef:
+              key: ENABLE_EMAIL_AUTOCONFIRM
+              name: supabase-identity-env
+        - name: GOTRUE_EXTERNAL_PHONE_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              key: ENABLE_PHONE_SIGNUP
+              name: supabase-identity-env
+        - name: GOTRUE_SMS_AUTOCONFIRM
+          valueFrom:
+            configMapKeyRef:
+              key: ENABLE_PHONE_AUTOCONFIRM
+              name: supabase-identity-env
+        - name: GOTRUE_OAUTH_SERVER_ENABLED
+          value: 'true'
+        - name: GOTRUE_OAUTH_SERVER_ALLOW_DYNAMIC_REGISTRATION
+          value: 'true'
+        - name: GOTRUE_OAUTH_SERVER_AUTHORIZATION_PATH
+          value: /
+        - name: GOTRUE_JWT_KEYS
+          valueFrom:
+            secretKeyRef:
+              key: GOTRUE_JWT_KEYS
+              name: supabase-identity-secrets
+        envFrom:
+        - configMapRef:
+            name: supabase-identity-env
+        - secretRef:
+            name: supabase-identity-secrets
+        image: registry.re8ch.com/auth/supabase-auth:v2.196.0@sha256:1ac1f43d16100d8c89ad39462e3e1d9e25fb121ccdd6748f2766b34cd0edf1c2
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+          timeoutSeconds: 2
+        name: auth
+        ports:
+        - containerPort: 9999
+          name: http
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 384Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        startupProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 2
+          timeoutSeconds: 1
+      hostAliases:
+      - hostnames:
+        - id.re8ch.com
+        ip: 223.159.210.222
+      - hostnames:
+        - pg-re8ch-primary.pigsty-external.svc.cluster.local
+        ip: 10.43.141.120
+      imagePullSecrets:
+      - name: supabase-identity-harbor-pull
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-identity-realtime
+  namespace: supabase-identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: realtime
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: realtime
+        app.kubernetes.io/part-of: supabase-identity
+    spec:
+      containers:
+      - env:
+        - name: PORT
+          value: '4000'
+        - name: DB_HOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: DB_PORT
+          value: '5432'
+        - name: DB_NAME
+          value: re8ch_identity
+        - name: DB_USER
+          value: supabase_realtime
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: REALTIME_DB_PASSWORD
+              name: supabase-identity-secrets
+        - name: DB_AFTER_CONNECT_QUERY
+          value: SET search_path TO _realtime
+        - name: DB_ENC_KEY
+          valueFrom:
+            secretKeyRef:
+              key: REALTIME_DB_ENC_KEY
+              name: supabase-identity-secrets
+        - name: API_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: supabase-identity-secrets
+        - name: METRICS_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: supabase-identity-secrets
+        - name: API_JWT_JWKS
+          valueFrom:
+            secretKeyRef:
+              key: JWT_PUBLIC_JWKS
+              name: supabase-identity-secrets
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              key: SECRET_KEY_BASE
+              name: supabase-identity-secrets
+        - name: ERL_AFLAGS
+          value: -proto_dist inet_tcp
+        - name: DNS_NODES
+          value: ''''''
+        - name: APP_NAME
+          value: realtime
+        - name: SEED_SELF_HOST
+          value: 'true'
+        - name: SELF_HOST_TENANT_NAME
+          value: supabase-identity-realtime
+        - name: RUN_JANITOR
+          value: 'true'
+        - name: DISABLE_HEALTHCHECK_LOGGING
+          value: 'true'
+        image: docker.io/supabase/realtime:v2.134.10@sha256:c1d078d929608f3eb4d441e30317bbdccc1bfcc1169efa3d1a26d4252417cc76
+        imagePullPolicy: IfNotPresent
+        name: realtime
+        ports:
+        - containerPort: 4000
+          name: http
+        readinessProbe:
+          periodSeconds: 10
+          tcpSocket:
+            port: http
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1024Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 24
+          periodSeconds: 5
+          tcpSocket:
+            port: http
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-identity-rest
+  namespace: supabase-identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: rest
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        identity.re8ch.com/schema-revision: tenant-runtime-memberships-v1
+      labels:
+        app.kubernetes.io/component: rest
+        app.kubernetes.io/part-of: supabase-identity
+    spec:
+      containers:
+      - env:
+        - name: PGRST_DB_URI
+          valueFrom:
+            secretKeyRef:
+              key: PGRST_DB_URI
+              name: supabase-identity-secrets
+        - name: PGRST_DB_ANON_ROLE
+          value: anon
+        - name: PGRST_ADMIN_SERVER_PORT
+          value: '3001'
+        - name: PGRST_ADMIN_SERVER_HOST
+          value: 127.0.0.1
+        - name: PGRST_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_VERIFICATION_JWKS
+              name: supabase-identity-secrets
+        - name: PGRST_DB_USE_LEGACY_GUCS
+          value: 'false'
+        - name: PGRST_APP_SETTINGS_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_SECRET
+              name: supabase-identity-secrets
+        - name: PGRST_APP_SETTINGS_JWT_EXP
+          valueFrom:
+            configMapKeyRef:
+              key: JWT_EXPIRY
+              name: supabase-identity-env
+        envFrom:
+        - configMapRef:
+            name: supabase-identity-env
+        - secretRef:
+            name: supabase-identity-secrets
+        image: docker.io/postgrest/postgrest@sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c
+        imagePullPolicy: Never
+        name: rest
+        ports:
+        - containerPort: 3000
+          name: http
+        resources:
+          limits:
+            cpu: 250m
+            memory: 512Mi
+          requests:
+            cpu: 40m
+            memory: 128Mi
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-identity-rest-ro
+  namespace: supabase-identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: rest-ro
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        identity.re8ch.com/privacy-schema-revision: supabase-identity-privacy-v1
+        identity.re8ch.com/schema-revision: supabase-platform-admin-api-v5
+      labels:
+        app.kubernetes.io/component: rest-ro
+        app.kubernetes.io/part-of: supabase-identity
+    spec:
+      containers:
+      - env:
+        - name: PGRST_DB_URI
+          valueFrom:
+            secretKeyRef:
+              key: PGRST_RO_DB_URI
+              name: supabase-identity-secrets
+        - name: PGRST_DB_SCHEMAS
+          value: api
+        - name: PGRST_DB_ANON_ROLE
+          value: anon
+        - name: PGRST_DB_MAX_ROWS
+          value: '1000'
+        - name: PGRST_DB_EXTRA_SEARCH_PATH
+          value: public
+        - name: PGRST_DB_USE_LEGACY_GUCS
+          value: 'false'
+        - name: PGRST_DB_CHANNEL_ENABLED
+          value: 'false'
+        - name: PGRST_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: JWT_VERIFICATION_JWKS
+              name: supabase-identity-secrets
+        image: docker.io/postgrest/postgrest@sha256:54000f24847d01a2c2302e0041cf0618b875c57fb48507d743cfa9aaa50bf43c
+        imagePullPolicy: Never
+        name: rest-ro
+        ports:
+        - containerPort: 3000
+          name: http
+        readinessProbe:
+          periodSeconds: 10
+          tcpSocket:
+            port: http
+        resources:
+          limits:
+            cpu: 250m
+            memory: 512Mi
+          requests:
+            cpu: 40m
+            memory: 128Mi
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: supabase-identity-privacy-v1
+  namespace: supabase-identity
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 -f /sql/migration.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: PGHOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: PGDATABASE
+          value: re8ch_identity
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER_READ_WRITE
+              name: supabase-identity-secrets
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: supabase-identity-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      restartPolicy: Never
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+      volumes:
+      - configMap:
+          name: supabase-identity-privacy-v1
+        name: sql
+  ttlSecondsAfterFinished: 604800
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: supabase-platform-admin-api-v5
+  namespace: supabase-identity
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 -f /sql/migration.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: PGHOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: PGDATABASE
+          value: re8ch_identity
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER_READ_WRITE
+              name: supabase-identity-secrets
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: supabase-identity-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      initContainers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 "$GOTRUE_DB_DATABASE_URL" -f /sql/auth-owner.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: GOTRUE_DB_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              key: GOTRUE_DB_DATABASE_URL
+              name: supabase-identity-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: authorize-session-metadata
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      restartPolicy: Never
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+      volumes:
+      - configMap:
+          name: supabase-platform-admin-api-v5
+        name: sql
+  ttlSecondsAfterFinished: 604800
+---
+apiVersion: v1
+data:
+  migration.sql: "begin;\n\n-- The public OAuth broker still uses legacy session IDs.\
+    \ Resolve those IDs\n-- through the migration's immutable link and read current\
+    \ organization rows.\n-- External provider observations may expire; organization\
+    \ membership does not.\ncreate or replace function api.auth_broker_groups(p_legacy_user_id\
+    \ bigint)\nreturns text[] language sql stable security definer\nset search_path\
+    \ = pg_catalog, pg_temp as $$\n  with linked as (\n    select l.user_id\n    from\
+    \ core.legacy_user_ids l\n    join auth.users u on u.id = l.user_id\n    where\
+    \ l.legacy_user_id = p_legacy_user_id\n      and u.deleted_at is null\n      and\
+    \ (u.banned_until is null or u.banned_until < now())\n      and u.email_confirmed_at\
+    \ is not null\n  ), memberships as (\n    select m.tenant_ref, m.role\n    from\
+    \ linked l\n    join core.organization_members m on m.user_id = l.user_id\n  \
+    \  join core.organizations o on o.tenant_ref = m.tenant_ref\n    where m.status\
+    \ = 'active' and o.status = 'active'\n      and o.kind <> 'personal'\n  ), projected\
+    \ as (\n    select 'tenant:' || tenant_ref || ':' || role as value from memberships\n\
+    \    union all\n    select 're8ch:k8s-admins' from memberships\n      where tenant_ref\
+    \ = 'admin' and role in ('owner', 'admin')\n    union all\n    select 're8ch:tenant-admins'\
+    \ from memberships\n      where tenant_ref = 'admin' and role in ('owner', 'admin')\n\
+    \  )\n  select coalesce(array_agg(distinct value order by value), '{}'::text[])\n\
+    \  from projected;\n$$;\nalter function api.auth_broker_groups(bigint) owner to\
+    \ supabase_admin;\nrevoke all on function api.auth_broker_groups(bigint) from\
+    \ public, anon, authenticated, service_role;\ngrant execute on function api.auth_broker_groups(bigint)\
+    \ to identity_service;\nnotify pgrst, 'reload schema';\n\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-identity-broker-groups-v2
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  ADDITIONAL_REDIRECT_URLS: https://api.re8ch.com/auth/v2/callback
+  API_EXTERNAL_URL: https://db-rw.re8ch.com/auth/v1
+  DISABLE_SIGNUP: 'false'
+  ENABLE_ANONYMOUS_USERS: 'false'
+  ENABLE_EMAIL_AUTOCONFIRM: 'false'
+  ENABLE_EMAIL_SIGNUP: 'true'
+  ENABLE_PHONE_AUTOCONFIRM: 'false'
+  ENABLE_PHONE_SIGNUP: 'true'
+  GLOBAL_S3_BUCKET: supabase-identity
+  GOTRUE_PASSKEY_ENABLED: 'true'
+  GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: RE8CH User Hub
+  GOTRUE_WEBAUTHN_RP_ID: auth.re8ch.com
+  GOTRUE_WEBAUTHN_RP_ORIGINS: https://auth.re8ch.com
+  IMGPROXY_AUTO_WEBP: 'true'
+  JWT_EXPIRY: '3600'
+  MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+  MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+  MAILER_URLPATHS_INVITE: /auth/v1/verify
+  MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+  PGRST_DB_EXTRA_SEARCH_PATH: public
+  PGRST_DB_MAX_ROWS: '1000'
+  PGRST_DB_SCHEMAS: api
+  POSTGRES_DB: re8ch_identity
+  POSTGRES_HOST: pg-re8ch-primary.pigsty-external.svc.cluster.local
+  POSTGRES_PORT: '5432'
+  REGION: r640-lan
+  S3_PROTOCOL_ACCESS_KEY_ID: ''
+  S3_PROTOCOL_ACCESS_KEY_SECRET: ''
+  SITE_URL: https://auth.re8ch.com
+  SMTP_ADMIN_EMAIL: ops@re8ch.com
+  SMTP_HOST: localhost
+  SMTP_PASS: ''
+  SMTP_PORT: '25'
+  SMTP_SENDER_NAME: RE8CH Supabase
+  SMTP_USER: ''
+  STORAGE_TENANT_ID: pg-re8ch
+  STUDIO_DEFAULT_ORGANIZATION: RE8CH
+  STUDIO_DEFAULT_PROJECT: re8ch_identity
+  SUPABASE_PUBLIC_URL: https://db-rw.re8ch.com
+kind: ConfigMap
+metadata:
+  name: supabase-identity-env
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  kong-entrypoint.sh: "#!/bin/sh\nif [ -n \"$SUPABASE_SECRET_KEY\" ] && [ -n \"$SUPABASE_PUBLISHABLE_KEY\"\
+    \ ]; then\n  export LUA_AUTH_EXPR=\"\\$((headers.authorization ~= nil and headers.authorization:sub(1,\
+    \ 10) ~= 'Bearer sb_' and headers.authorization) or (headers.apikey == '$SUPABASE_SECRET_KEY'\
+    \ and 'Bearer $SERVICE_ROLE_KEY_ASYMMETRIC') or (headers.apikey == '$SUPABASE_PUBLISHABLE_KEY'\
+    \ and 'Bearer $ANON_KEY_ASYMMETRIC') or headers.apikey)\"\n  export LUA_RT_WS_EXPR=\"\
+    \\$((query_params.apikey == '$SUPABASE_SECRET_KEY' and '$SERVICE_ROLE_KEY_ASYMMETRIC')\
+    \ or (query_params.apikey == '$SUPABASE_PUBLISHABLE_KEY' and '$ANON_KEY_ASYMMETRIC')\
+    \ or query_params.apikey)\"\nelse\n  export LUA_AUTH_EXPR=\"\\$((headers.authorization\
+    \ ~= nil and headers.authorization:sub(1, 10) ~= 'Bearer sb_' and headers.authorization)\
+    \ or headers.apikey)\"\n  export LUA_RT_WS_EXPR=\"\\$(query_params.apikey)\"\n\
+    fi\nawk '{\n  result = \"\"\n  rest = $0\n  while (match(rest, /\\$[A-Za-z_][A-Za-z_0-9]*/))\
+    \ {\n    varname = substr(rest, RSTART + 1, RLENGTH - 1)\n    if (varname in ENVIRON)\
+    \ {\n      result = result substr(rest, 1, RSTART - 1) ENVIRON[varname]\n    }\
+    \ else {\n      result = result substr(rest, 1, RSTART + RLENGTH - 1)\n    }\n\
+    \    rest = substr(rest, RSTART + RLENGTH)\n  }\n  print result rest\n}' /home/kong/temp.yml\
+    \ > \"$KONG_DECLARATIVE_CONFIG\"\nsed -i '/^[[:space:]]*- key:[[:space:]]*$/d'\
+    \ \"$KONG_DECLARATIVE_CONFIG\"\nexec /entrypoint.sh kong docker-start\n"
+  kong.yml: "_format_version: '2.1'\n_transform: true\nconsumers:\n  - username: DASHBOARD\n\
+    \  - username: anon\n    keyauth_credentials:\n      - key: $SUPABASE_ANON_KEY\n\
+    \  - username: service_role\n    keyauth_credentials:\n      - key: $SUPABASE_SERVICE_KEY\n\
+    acls:\n  - consumer: anon\n    group: anon\n  - consumer: service_role\n    group:\
+    \ admin\nbasicauth_credentials:\n  - consumer: DASHBOARD\n    username: '$DASHBOARD_USERNAME'\n\
+    \    password: '$DASHBOARD_PASSWORD'\nservices:\n  - name: auth-v1-open\n    url:\
+    \ http://supabase-identity-auth:9999/verify\n    routes:\n      - name: auth-v1-open\n\
+    \        strip_path: true\n        paths: [/auth/v1/verify]\n    plugins:\n  \
+    \    - name: cors\n  - name: auth-v1-open-callback\n    url: http://supabase-identity-auth:9999/callback\n\
+    \    routes:\n      - name: auth-v1-open-callback\n        strip_path: true\n\
+    \        paths: [/auth/v1/callback]\n    plugins:\n      - name: cors\n  - name:\
+    \ auth-v1-open-authorize\n    url: http://supabase-identity-auth:9999/authorize\n\
+    \    routes:\n      - name: auth-v1-open-authorize\n        strip_path: true\n\
+    \        paths: [/auth/v1/authorize]\n    plugins:\n      - name: cors\n  - name:\
+    \ auth-v1\n    url: http://supabase-identity-auth:9999/\n    routes:\n      -\
+    \ name: auth-v1-all\n        strip_path: true\n        paths: [/auth/v1/]\n  \
+    \  plugins:\n      - name: cors\n      - name: key-auth\n        config:\n   \
+    \       hide_credentials: false\n      - name: request-transformer\n        config:\n\
+    \          replace:\n            headers:\n              - \"Authorization: $LUA_AUTH_EXPR\"\
+    \n      - name: acl\n        config:\n          hide_groups_header: true\n   \
+    \       allow: [admin, anon]\n  - name: rest-v1\n    url: http://supabase-identity-rest:3000/\n\
+    \    routes:\n      - name: rest-v1-all\n        strip_path: true\n        paths:\
+    \ [/rest/v1/]\n    plugins:\n      - name: cors\n      - name: key-auth\n    \
+    \    config:\n          hide_credentials: false\n      - name: request-transformer\n\
+    \        config:\n          replace:\n            headers:\n              - \"\
+    Authorization: $LUA_AUTH_EXPR\"\n      - name: acl\n        config:\n        \
+    \  hide_groups_header: true\n          allow: [admin, anon]\n  - name: realtime-v1-ws\n\
+    \    url: http://supabase-identity-realtime:4000/socket\n    protocol: ws\n  \
+    \  routes:\n      - name: realtime-v1-ws\n        strip_path: true\n        paths:\
+    \ [/realtime/v1/]\n    plugins:\n      - name: cors\n      - name: key-auth\n\
+    \        config:\n          hide_credentials: false\n      - name: request-transformer\n\
+    \        config:\n          add:\n            headers:\n              - \"x-api-key:$LUA_RT_WS_EXPR\"\
+    \n          replace:\n            querystring:\n              - \"apikey:$LUA_RT_WS_EXPR\"\
+    \n      - name: acl\n        config:\n          hide_groups_header: true\n   \
+    \       allow: [admin, anon]\n  - name: meta\n    url: http://supabase-identity-meta:8080/\n\
+    \    routes:\n      - name: meta-all\n        strip_path: true\n        paths:\
+    \ [/pg/]\n    plugins:\n      - name: key-auth\n        config:\n          hide_credentials:\
+    \ false\n      - name: acl\n        config:\n          hide_groups_header: true\n\
+    \          allow: [admin]\n  - name: dashboard\n    url: http://supabase-identity-studio:3000/\n\
+    \    routes:\n      - name: dashboard-all\n        strip_path: true\n        paths:\
+    \ [/]\n    plugins:\n      - name: cors\n      - name: basic-auth\n        config:\n\
+    \          hide_credentials: true\n          realm: RE8CH Identity Studio\n"
+kind: ConfigMap
+metadata:
+  name: supabase-identity-kong-config
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  migration.sql: "do $$ begin if to_regprocedure('api.platform_user_update(uuid,text)')\
+    \ is null then raise exception 'identity migration 048 is required'; end if; end\
+    \ $$;\n-- Source: re8ch/cloud-functions@7832f51762a9959d022d51be7e5b643e5271fa97\n\
+    -- Request handling is not erasure: completion records an operator's evidence.\n\
+    -- Identity exports are generated on demand and never persisted as bearer URLs.\n\
+    begin;\nalter table core.account_requests drop constraint if exists account_requests_status_check;\n\
+    alter table core.account_requests add constraint account_requests_status_check\n\
+    \ check(status in ('pending','in_progress','completed','rejected','cancelled'));\n\
+    alter table core.account_requests add column if not exists version integer not\
+    \ null default 1;\nalter table core.account_requests add column if not exists\
+    \ evidence_ref text;\ncreate table if not exists core.account_request_events (\n\
+    \ id bigint generated always as identity primary key,\n request_id uuid not null\
+    \ references core.account_requests(id) on delete restrict,\n actor_id uuid references\
+    \ auth.users(id) on delete set null,\n status text not null, note text, evidence_ref\
+    \ text,\n created_at timestamptz not null default now()\n);\nalter table core.account_request_events\
+    \ owner to supabase_admin;\nrevoke all on core.account_request_events from public,anon,authenticated;\n\
+    \ncreate or replace function core.require_privacy_session()\nreturns uuid language\
+    \ plpgsql stable security definer set search_path=pg_catalog,pg_temp as $$\ndeclare\
+    \ u uuid := api.current_user_id();\nbegin\n if u is null or not auth.platform_session_active()\
+    \ or not exists(\n  select 1 from auth.users where id=u and deleted_at is null)\
+    \ then\n  raise exception 'active login session required' using errcode='28000';\n\
+    \ end if;\n return u;\nend $$;\nalter function core.require_privacy_session()\
+    \ owner to supabase_admin;\nrevoke all on function core.require_privacy_session()\
+    \ from public,anon,authenticated;\n\ncreate or replace function core.privacy_request_json(r\
+    \ core.account_requests)\nreturns jsonb language sql stable security definer set\
+    \ search_path=pg_catalog,pg_temp as $$\n select jsonb_build_object('id',r.id,'type',r.request_type,'status',r.status,\n\
+    \ 'createdAt',r.created_at,'updatedAt',r.updated_at,'version',r.version,'note',r.note,\n\
+    \ 'history',coalesce((select jsonb_agg(jsonb_build_object('status',e.status,'note',e.note,\n\
+    \ 'createdAt',e.created_at) order by e.id) from core.account_request_events e\
+    \ where e.request_id=r.id),'[]'::jsonb))\n$$;\nalter function core.privacy_request_json(core.account_requests)\
+    \ owner to supabase_admin;\nrevoke all on function core.privacy_request_json(core.account_requests)\
+    \ from public,anon,authenticated;\n\ncreate or replace function api.request_account_action(p_request_type\
+    \ text)\nreturns jsonb language plpgsql volatile security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare u uuid := core.require_privacy_session(); r core.account_requests;\n\
+    begin\n if p_request_type is null or p_request_type not in ('export','delete')\
+    \ then\n  raise exception 'invalid request type' using errcode='22023';\n end\
+    \ if;\n perform pg_advisory_xact_lock(hashtextextended('privacy:'||u::text||':'||p_request_type,0));\n\
+    \ select * into r from core.account_requests where user_id=u and request_type=p_request_type\
+    \ and status in ('pending','in_progress');\n if not found then\n  insert into\
+    \ core.account_requests(user_id,request_type) values(u,p_request_type) returning\
+    \ * into r;\n  insert into core.account_request_events(request_id,actor_id,status)\
+    \ values(r.id,u,r.status);\n end if;\n return core.privacy_request_json(r);\n\
+    end $$;\n\ncreate or replace function api.my_account_requests()\nreturns jsonb\
+    \ language plpgsql stable security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare u uuid := core.require_privacy_session(); result jsonb;\nbegin\n\
+    \ select coalesce(jsonb_agg(core.privacy_request_json(r) order by r.created_at\
+    \ desc,r.id),'[]'::jsonb)\n into result from core.account_requests r where r.user_id=u;\n\
+    \ return result;\nend $$;\n\ncreate or replace function api.cancel_account_request(p_request_id\
+    \ uuid,p_version integer)\nreturns jsonb language plpgsql volatile security definer\
+    \ set search_path=pg_catalog,pg_temp as $$\ndeclare u uuid := core.require_privacy_session();\
+    \ r core.account_requests;\nbegin\n select * into r from core.account_requests\
+    \ where id=p_request_id and user_id=u for update;\n if not found then raise exception\
+    \ 'request not found' using errcode='PT404';end if;\n if p_version is distinct\
+    \ from r.version or r.status<>'pending' then\n  raise exception 'request changed\
+    \ or processing already started; refresh the list' using errcode='23505';end if;\n\
+    \ update core.account_requests set status='cancelled',updated_at=clock_timestamp(),version=version+1\
+    \ where id=r.id returning * into r;\n insert into core.account_request_events(request_id,actor_id,status)\
+    \ values(r.id,u,r.status);\n return core.privacy_request_json(r);\nend $$;\n\n\
+    create or replace function api.admin_account_requests()\nreturns jsonb language\
+    \ plpgsql stable security definer set search_path=pg_catalog,pg_temp as $$\ndeclare\
+    \ u uuid := core.require_privacy_session(); result jsonb;\nbegin\n if not core.is_platform_admin(u)\
+    \ then raise exception 'permission denied' using errcode='42501';end if;\n perform\
+    \ core.require_admin_step_up();\n select coalesce(jsonb_agg(core.privacy_request_json(r)||jsonb_build_object('userId',r.user_id,\n\
+    \ 'email',a.email,'evidenceRef',r.evidence_ref) order by r.created_at,r.id),'[]'::jsonb)\n\
+    \ into result from core.account_requests r join auth.users a on a.id=r.user_id\n\
+    \ where r.status in ('pending','in_progress');\n return result;\nend $$;\n\ncreate\
+    \ or replace function api.admin_update_account_request(p_request_id uuid,p_version\
+    \ integer,p_status text,p_note text,p_evidence_ref text default null)\nreturns\
+    \ jsonb language plpgsql volatile security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare u uuid := core.require_privacy_session(); r core.account_requests;\n\
+    begin\n if not core.is_platform_admin(u) then raise exception 'permission denied'\
+    \ using errcode='42501';end if;\n perform core.require_admin_step_up();\n if p_status\
+    \ is null or p_status not in ('in_progress','completed','rejected') or\n p_note\
+    \ is null or length(btrim(p_note)) not between 1 and 2000 or\n (p_evidence_ref\
+    \ is not null and length(btrim(p_evidence_ref)) not between 1 and 500) then\n\
+    \  raise exception 'invalid status, note or evidence reference' using errcode='22023';end\
+    \ if;\n if p_status='completed' and nullif(btrim(p_evidence_ref),'') is null then\n\
+    \  raise exception 'completion requires a fulfillment evidence reference' using\
+    \ errcode='22023';end if;\n select * into r from core.account_requests where id=p_request_id\
+    \ for update;\n if not found then raise exception 'request not found' using errcode='PT404';end\
+    \ if;\n if p_version is distinct from r.version or not (\n  (r.status='pending'\
+    \ and p_status in ('in_progress','rejected')) or\n  (r.status='in_progress' and\
+    \ p_status in ('in_progress','completed','rejected'))) then\n  raise exception\
+    \ 'request changed or transition is not allowed' using errcode='23505';end if;\n\
+    \ update core.account_requests set status=p_status,note=btrim(p_note),evidence_ref=nullif(btrim(p_evidence_ref),''),\n\
+    \ handled_by=u,updated_at=clock_timestamp(),version=version+1 where id=r.id returning\
+    \ * into r;\n insert into core.account_request_events(request_id,actor_id,status,note,evidence_ref)\n\
+    \ values(r.id,u,r.status,r.note,r.evidence_ref);\n return core.privacy_request_json(r);\n\
+    end $$;\n\ncreate or replace function api.my_identity_export()\nreturns jsonb\
+    \ language plpgsql stable security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare u uuid := core.require_privacy_session();\nbegin\n return jsonb_build_object('schemaVersion',1,'generatedAt',statement_timestamp(),'userId',u,\n\
+    \ 'scope','identity-only','excludes',jsonb_build_array('authentication secrets','other\
+    \ users','product data','billing records','infrastructure resources'),\n 'profile',api.my_profile(),\n\
+    \ 'memberships',coalesce((select jsonb_agg(jsonb_build_object('tenantRef',tenant_ref,'role',role,'status',status,'permissions',permissions)\
+    \ order by tenant_ref)\n from core.organization_members where user_id=u),'[]'::jsonb),\n\
+    \ 'devices',coalesce((select jsonb_agg(jsonb_build_object('label',label,'firstSeenAt',first_seen_at,'lastSeenAt',last_seen_at)\
+    \ order by id)\n from core.user_devices where user_id=u),'[]'::jsonb),\n 'requests',api.my_account_requests());\n\
+    end $$;\n\nalter function api.request_account_action(text) owner to supabase_admin;\n\
+    alter function api.my_account_requests() owner to supabase_admin;\nalter function\
+    \ api.cancel_account_request(uuid,integer) owner to supabase_admin;\nalter function\
+    \ api.admin_account_requests() owner to supabase_admin;\nalter function api.admin_update_account_request(uuid,integer,text,text,text)\
+    \ owner to supabase_admin;\nalter function api.my_identity_export() owner to supabase_admin;\n\
+    revoke all on function api.request_account_action(text),api.my_account_requests(),api.cancel_account_request(uuid,integer),\n\
+    \ api.admin_account_requests(),api.admin_update_account_request(uuid,integer,text,text,text),api.my_identity_export()\
+    \ from public,anon;\ngrant execute on function api.request_account_action(text),api.my_account_requests(),api.cancel_account_request(uuid,integer),\n\
+    \ api.admin_account_requests(),api.admin_update_account_request(uuid,integer,text,text,text),api.my_identity_export()\
+    \ to authenticated;\nnotify pgrst,'reload schema';\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-identity-privacy-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  migration.sql: 'begin;
+
+    -- Membership records express durable entitlements. Request scoping is
+
+    -- independently enforced by core.user_active_organizations, so retaining
+
+    -- more than one active non-personal membership does not combine privileges.
+
+    drop trigger if exists enforce_single_active_non_personal_membership on core.organization_members;
+
+    drop function if exists core.enforce_single_active_non_personal_membership();
+
+    commit;
+
+    '
+kind: ConfigMap
+metadata:
+  name: supabase-multi-organization-memberships-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  '2981225a-da08-5aaa-9e84-8fd151696113',\
+    \ '', 'manual', 'public',\n  'none', 'https://tools.service.re8ch.com/api/auth/oauth2/callback/oidc',\n\
+    \  'authorization_code,refresh_token', 'RE8CH Tenant MCP',\n  'https://tools.service.re8ch.com/tenant/mcp'\n\
+    ) on conflict (id) do update set\n  client_secret_hash = excluded.client_secret_hash,\n\
+    \  registration_type = excluded.registration_type,\n  client_type = excluded.client_type,\n\
+    \  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n  redirect_uris\
+    \ = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n  client_name\
+    \ = excluded.client_name,\n  client_uri = excluded.client_uri,\n  deleted_at =\
+    \ null,\n  updated_at = now();\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-client-tenant-mcp-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  'e93247af-5bc0-4f3d-829b-8a70e0a69d31',\
+    \ '', 'manual', 'public',\n  'none', 'https://sub.access.re8ch.com/oauth/callback',\n\
+    \  'authorization_code,refresh_token', 'RE8CH Access subscription',\n  'https://sub.access.re8ch.com'\n\
+    ) on conflict (id) do update set\n  client_secret_hash = excluded.client_secret_hash,\n\
+    \  registration_type = excluded.registration_type,\n  client_type = excluded.client_type,\n\
+    \  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n  redirect_uris\
+    \ = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n  client_name\
+    \ = excluded.client_name,\n  client_uri = excluded.client_uri,\n  deleted_at =\
+    \ null,\n  updated_at = now();\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-access-subscription-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values\n  ('99dfaad5-0948-43af-bf07-195d94b59171',\
+    \ '', 'manual', 'public',\n   'none', 'com.phonaid.anycam:/oauth/callback',\n\
+    \   'authorization_code,refresh_token', 'Anycam Android',\n   'https://anycam.re8ch.com'),\n\
+    \  ('6e0eb2e4-2d9a-409c-bc32-34d931e0f95e', '', 'manual', 'public',\n   'none',\
+    \ 'com.phonaid.anycam.ios:/oauth/callback',\n   'authorization_code,refresh_token',\
+    \ 'Anycam iOS',\n   'https://anycam.re8ch.com')\non conflict (id) do update set\n\
+    \  client_secret_hash = excluded.client_secret_hash,\n  registration_type = excluded.registration_type,\n\
+    \  client_type = excluded.client_type,\n  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n\
+    \  redirect_uris = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n\
+    \  client_name = excluded.client_name,\n  client_uri = excluded.client_uri,\n\
+    \  deleted_at = null,\n  updated_at = now();\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-anycam-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  '78b8cdcf-444a-43c1-aa22-c7947046e481',\
+    \ '', 'manual', 'public',\n  'none', 'https://catalog.re8ch.com/',\n  'authorization_code,refresh_token',\
+    \ 'RE8CH Catalog',\n  'https://catalog.re8ch.com'\n) on conflict (id) do update\
+    \ set\n  client_secret_hash = excluded.client_secret_hash,\n  registration_type\
+    \ = excluded.registration_type,\n  client_type = excluded.client_type,\n  token_endpoint_auth_method\
+    \ = excluded.token_endpoint_auth_method,\n  redirect_uris = excluded.redirect_uris,\n\
+    \  grant_types = excluded.grant_types,\n  client_name = excluded.client_name,\n\
+    \  client_uri = excluded.client_uri,\n  deleted_at = null,\n  updated_at = now();\n\
+    do $$\nbegin\n  if not exists (\n    select 1 from auth.oauth_clients\n    where\
+    \ id = '78b8cdcf-444a-43c1-aa22-c7947046e481'\n      and client_secret_hash =\
+    \ ''\n      and client_type = 'public' and token_endpoint_auth_method = 'none'\n\
+    \      and redirect_uris = 'https://catalog.re8ch.com/'\n      and deleted_at\
+    \ is null\n  ) then\n    raise exception 'Catalog OAuth client was not registered';\n\
+    \  end if;\nend $$;\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-catalog-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  'ed4e0331-7522-59f8-8a72-2d558844dc24',\
+    \ '', 'manual', 'public',\n  'none', 'https://headlamp.service.re8ch.com/oidc-callback',\n\
+    \  'authorization_code,refresh_token', 'Headlamp Kubernetes console',\n  'https://headlamp.service.re8ch.com'\n\
+    ) on conflict (id) do update set\n  client_secret_hash = excluded.client_secret_hash,\n\
+    \  registration_type = excluded.registration_type,\n  client_type = excluded.client_type,\n\
+    \  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n  redirect_uris\
+    \ = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n  client_name\
+    \ = excluded.client_name,\n  client_uri = excluded.client_uri,\n  deleted_at =\
+    \ null,\n  updated_at = now();\ndo $$\nbegin\n  if not exists (\n    select 1\
+    \ from auth.oauth_clients\n    where id = 'ed4e0331-7522-59f8-8a72-2d558844dc24'\n\
+    \      and client_secret_hash = ''\n      and client_type = 'public' and token_endpoint_auth_method\
+    \ = 'none'\n      and deleted_at is null\n  ) then\n    raise exception 'Headlamp\
+    \ OAuth client was not registered';\n  end if;\nend $$;\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-headlamp-v2
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: 'begin;
+
+    insert into auth.oauth_clients (id, client_secret_hash, registration_type, client_type,
+    token_endpoint_auth_method, redirect_uris, grant_types, client_name, client_uri)
+
+    values (''705c1168-43d8-4ec3-980a-0327a59c7fc6'', '''', ''manual'', ''public'',
+    ''none'', ''https://mail.re8ch.com/auth/callback,https://mail.re8ch.com/ar/auth/callback,https://mail.re8ch.com/ca/auth/callback,https://mail.re8ch.com/cs/auth/callback,https://mail.re8ch.com/da/auth/callback,https://mail.re8ch.com/de/auth/callback,https://mail.re8ch.com/en/auth/callback,https://mail.re8ch.com/es/auth/callback,https://mail.re8ch.com/fa/auth/callback,https://mail.re8ch.com/fr/auth/callback,https://mail.re8ch.com/he/auth/callback,https://mail.re8ch.com/hu/auth/callback,https://mail.re8ch.com/it/auth/callback,https://mail.re8ch.com/ja/auth/callback,https://mail.re8ch.com/ko/auth/callback,https://mail.re8ch.com/lv/auth/callback,https://mail.re8ch.com/mn/auth/callback,https://mail.re8ch.com/nb/auth/callback,https://mail.re8ch.com/nl/auth/callback,https://mail.re8ch.com/pl/auth/callback,https://mail.re8ch.com/pt/auth/callback,https://mail.re8ch.com/ro/auth/callback,https://mail.re8ch.com/ru/auth/callback,https://mail.re8ch.com/sk/auth/callback,https://mail.re8ch.com/tr/auth/callback,https://mail.re8ch.com/uk/auth/callback,https://mail.re8ch.com/zh/auth/callback,https://mail.re8ch.com/zh-TW/auth/callback'',
+    ''authorization_code,refresh_token'', ''RE8CH Mail'', ''https://mail.re8ch.com'')
+
+    on conflict (id) do update set client_secret_hash=excluded.client_secret_hash,
+    registration_type=excluded.registration_type, client_type=excluded.client_type,
+    token_endpoint_auth_method=excluded.token_endpoint_auth_method, redirect_uris=excluded.redirect_uris,
+    grant_types=excluded.grant_types, client_name=excluded.client_name, client_uri=excluded.client_uri,
+    deleted_at=null, updated_at=now();
+
+    select id, client_name, client_type from auth.oauth_clients where id=''705c1168-43d8-4ec3-980a-0327a59c7fc6''
+    and deleted_at is null;
+
+    commit;
+
+    '
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-stalwart-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  auth-owner.sql: "-- Apply as supabase_auth_admin before 046_identity_platform_sessions.sql.\n\
+    -- GoTrue owns session tables with RLS enabled. Expose a boolean for the verified\n\
+    -- request only; SELECT grants alone do not cross this ownership boundary.\nbegin;\n\
+    grant usage on schema auth to supabase_admin;\ngrant references(id) on auth.sessions,\
+    \ auth.users to supabase_admin;\ncreate or replace function auth.platform_session_active()\n\
+    returns boolean language sql stable security definer\nset search_path = pg_catalog,\
+    \ pg_temp as $$\n  select exists (\n    select 1 from auth.sessions s\n    where\
+    \ s.id = nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb\
+    \ ->> 'session_id', '')::uuid\n      and s.user_id = nullif(nullif(current_setting('request.jwt.claims',\
+    \ true), '')::jsonb ->> 'sub', '')::uuid\n      and (s.not_after is null or s.not_after\
+    \ > now())\n      -- GoTrue v2.196 supports both legacy token rows and HMAC refresh\
+    \ tokens.\n      -- HMAC sessions carry the rotation counter on the session itself.\n\
+    \      and ((s.refresh_token_counter is not null and s.refresh_token_hmac_key\
+    \ is not null)\n        or exists (select 1 from auth.refresh_tokens r where r.session_id\
+    \ = s.id and not r.revoked))\n  )\n$$;\nalter function auth.platform_session_active()\
+    \ owner to supabase_auth_admin;\nrevoke all on function auth.platform_session_active()\
+    \ from public, anon, authenticated;\ngrant execute on function auth.platform_session_active()\
+    \ to supabase_admin;\ncommit;\n-- Apply as the GoTrue table owner. Existing SELECT\
+    \ grants do not bypass RLS.\n-- Only the trusted identity RPC owner can read users;\
+    \ API roles receive no access.\nbegin;\ndrop policy if exists identity_rpc_user_read\
+    \ on auth.users;\ncreate policy identity_rpc_user_read on auth.users for select\
+    \ to supabase_admin using (true);\ncommit;\n"
+  migration.sql: "-- Reviewed Cloud Functions 43eb7f2\n\n-- Persist one platform entitlement\
+    \ decision per verified GoTrue login session.\n-- Token refresh preserves session_id;\
+    \ a new login is evaluated independently.\nbegin;\ncreate table if not exists\
+    \ core.platform_session_entitlements (\n  session_id uuid primary key references\
+    \ auth.sessions(id) on delete cascade,\n  user_id uuid not null references auth.users(id)\
+    \ on delete cascade,\n  allowed boolean not null,\n  decided_at timestamptz not\
+    \ null default now()\n);\nalter table core.platform_session_entitlements owner\
+    \ to supabase_admin;\nalter table core.platform_session_entitlements enable row\
+    \ level security;\nrevoke all on core.platform_session_entitlements from public,\
+    \ anon, authenticated;\n\ncreate or replace function api.platform_session_entitlement()\n\
+    returns jsonb language plpgsql volatile security definer\nset search_path = pg_catalog,\
+    \ pg_temp as $$\ndeclare v_user uuid := api.current_user_id(); v_session uuid;\
+    \ v_allowed boolean;\nbegin\n  v_session := nullif(nullif(current_setting('request.jwt.claims',\
+    \ true), '')::jsonb\n    ->> 'session_id', '')::uuid;\n  if v_user is null or\
+    \ v_session is null then\n    raise exception 'authenticated login session required'\
+    \ using errcode = '28000';\n  end if;\n  -- No cached grant outlives logout, revocation,\
+    \ expiry, or its actual owner.\n  if not auth.platform_session_active() then\n\
+    \    raise exception 'session is no longer active' using errcode = '28000';\n\
+    \  end if;\n  select allowed into v_allowed from core.platform_session_entitlements\n\
+    \    where session_id = v_session and user_id = v_user;\n  if not found then\n\
+    \    -- Concurrent replicas must not evaluate and overwrite different decisions.\n\
+    \    perform pg_advisory_xact_lock(hashtextextended('platform-session:' || v_session::text,\
+    \ 0));\n    select allowed into v_allowed from core.platform_session_entitlements\n\
+    \      where session_id = v_session and user_id = v_user;\n    if not found then\n\
+    \      v_allowed := core.is_platform_admin(v_user);\n      insert into core.platform_session_entitlements(session_id,\
+    \ user_id, allowed)\n        values(v_session, v_user, v_allowed);\n    end if;\n\
+    \  end if;\n  return jsonb_build_object('sessionId', v_session, 'subject', v_user,\
+    \ 'platformAdmin', v_allowed);\nend $$;\nalter function api.platform_session_entitlement()\
+    \ owner to supabase_admin;\nrevoke all on function api.platform_session_entitlement()\
+    \ from public, anon;\ngrant execute on function api.platform_session_entitlement()\
+    \ to authenticated;\ncommit;\nnotify pgrst, 'reload schema';\n\n-- Platform sessions\
+    \ reuse the established organization functions and invariants.\n-- A session grant\
+    \ is not an organization membership: only this authenticated\n-- login can use\
+    \ it, and it disappears with the actual GoTrue session.\nbegin;\ncreate or replace\
+    \ function core.has_platform_session(p_user_id uuid)\nreturns boolean language\
+    \ sql stable security definer\nset search_path=pg_catalog,pg_temp as $$\n select\
+    \ p_user_id=api.current_user_id() and auth.platform_session_active() and exists(\n\
+    \  select 1 from core.platform_session_entitlements g\n  where g.user_id=p_user_id\
+    \ and g.allowed\n   and g.session_id::text=coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'session_id',''))\n\
+    $$;\nalter function core.has_platform_session(uuid) owner to supabase_admin;\n\
+    revoke all on function core.has_platform_session(uuid) from public,anon,authenticated;\n\
+    \n-- Keep the existing UI's step-up rule for sessions without a platform grant.\n\
+    create or replace function core.require_admin_step_up()\nreturns void language\
+    \ plpgsql stable security definer\nset search_path=pg_catalog,pg_temp as $$\n\
+    begin\n if core.has_platform_session(api.current_user_id()) then return;end if;\n\
+    \ if coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'aal','')<>'aal2'\
+    \ then\n  raise exception 'verify your authenticator before this admin action'\
+    \ using errcode='42501';\n end if;\nend $$;\nalter function core.require_admin_step_up()\
+    \ owner to supabase_admin;\nrevoke all on function core.require_admin_step_up()\
+    \ from public,anon,authenticated;\n\ncreate or replace function core.can_manage_org(p_user_id\
+    \ uuid,p_tenant_ref text,p_owner_only boolean default false)\nreturns boolean\
+    \ language sql stable security definer\nset search_path=pg_catalog,pg_temp as\
+    \ $$\n with recursive ancestors(tenant_ref,parent_ref,depth) as (\n  select tenant_ref,parent_ref,0\
+    \ from core.organizations where tenant_ref=p_tenant_ref and status='active'\n\
+    \  union all\n  select p.tenant_ref,p.parent_ref,a.depth+1 from core.organizations\
+    \ p join ancestors a on p.tenant_ref=a.parent_ref\n   where p.status='active'\
+    \ and a.depth<50)\n select (core.has_platform_session(p_user_id) and exists(select\
+    \ 1 from ancestors)) or exists(\n  select 1 from ancestors a join core.organization_members\
+    \ m on m.tenant_ref=a.tenant_ref\n  where m.user_id=p_user_id and m.status='active'\
+    \ and (m.role='owner' or (not p_owner_only and m.role='admin')))\n$$;\nalter function\
+    \ core.can_manage_org(uuid,text,boolean) owner to supabase_admin;\nrevoke all\
+    \ on function core.can_manage_org(uuid,text,boolean) from public,anon,authenticated;\n\
+    \ncreate or replace function api.platform_organization_get(p_tenant_ref text)\n\
+    returns jsonb language plpgsql stable security definer\nset search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare v_org core.organizations;\nbegin\n if not core.has_platform_session(api.current_user_id())\
+    \ then raise exception 'platform session required' using errcode='42501';end if;\n\
+    \ select * into v_org from core.organizations where tenant_ref=p_tenant_ref;\n\
+    \ if not found then raise exception 'organization not found' using errcode='P0002';end\
+    \ if;\n return jsonb_build_object('tenantRef',v_org.tenant_ref,'displayName',v_org.display_name,'parentRef',v_org.parent_ref,'kind',v_org.kind,'status',v_org.status);\n\
+    end $$;\nalter function api.platform_organization_get(text) owner to supabase_admin;\n\
+    revoke all on function api.platform_organization_get(text) from public,anon;\n\
+    grant execute on function api.platform_organization_get(text) to authenticated;\n\
+    \ncreate or replace function api.platform_organization_members(p_tenant_ref text,p_limit\
+    \ integer default 100,p_offset integer default 0)\nreturns jsonb language plpgsql\
+    \ stable security definer\nset search_path=pg_catalog,pg_temp as $$\ndeclare v_result\
+    \ jsonb;\nbegin\n perform api.platform_organization_get(p_tenant_ref);\n if p_limit\
+    \ is null or p_limit<1 or p_limit>250 or p_offset is null or p_offset<0 then raise\
+    \ exception 'invalid pagination';end if;\n select coalesce(jsonb_agg(to_jsonb(m)),'[]'::jsonb)\
+    \ into v_result from (\n  select user_id as \"userId\",role,status,created_at\
+    \ as \"createdAt\",updated_at as \"updatedAt\"\n  from core.organization_members\
+    \ where tenant_ref=p_tenant_ref order by created_at,user_id limit p_limit offset\
+    \ p_offset) m;\n return jsonb_build_object('tenantRef',p_tenant_ref,'members',v_result);\n\
+    end $$;\nalter function api.platform_organization_members(text,integer,integer)\
+    \ owner to supabase_admin;\nrevoke all on function api.platform_organization_members(text,integer,integer)\
+    \ from public,anon;\ngrant execute on function api.platform_organization_members(text,integer,integer)\
+    \ to authenticated;\ncommit;\nnotify pgrst,'reload schema';\n\n-- User CRUD source:\
+    \ re8ch/cloud-functions PR #107\n-- Credential lifecycle belongs to GoTrue, never\
+    \ direct writes to auth.users.\nbegin;\ncreate or replace function api.platform_user_delete_guard(p_user_id\
+    \ uuid)\nreturns jsonb language plpgsql volatile security definer\nset search_path=pg_catalog,pg_temp\
+    \ as $$\nbegin\n if not core.has_platform_session(api.current_user_id()) then\
+    \ raise exception 'platform session required' using errcode='42501';end if;\n\
+    \ if p_user_id=api.current_user_id() or exists(select 1 from core.organization_members\
+    \ where user_id=p_user_id and tenant_ref='admin' and status='active') then\n \
+    \ raise exception 'protected user' using errcode='23505';\n end if;\n if not exists(select\
+    \ 1 from auth.users where id=p_user_id and deleted_at is null) then raise exception\
+    \ 'user not found' using errcode='P0002';end if;\n if exists(select 1 from core.organization_members\
+    \ m join core.organizations o on o.tenant_ref=m.tenant_ref where m.user_id=p_user_id\
+    \ and m.status='active' and o.kind<>'personal' and o.status='active') then\n \
+    \ raise exception 'remove organization memberships before deleting user' using\
+    \ errcode='23505';\n end if;\n if exists(select 1 from core.organizations parent\
+    \ join core.organizations child on child.parent_ref=parent.tenant_ref where parent.personal_owner_id=p_user_id\
+    \ and child.status='active') then\n  raise exception 'move child organizations\
+    \ before deleting user' using errcode='23505';\n end if;\n return jsonb_build_object('personalOrganizations',coalesce((select\
+    \ jsonb_agg(tenant_ref) from core.organizations where personal_owner_id=p_user_id\
+    \ and kind='personal'),'[]'::jsonb));\nend $$;\nalter function api.platform_user_delete_guard(uuid)\
+    \ owner to supabase_admin;\nrevoke all on function api.platform_user_delete_guard(uuid)\
+    \ from public,anon;\ngrant execute on function api.platform_user_delete_guard(uuid)\
+    \ to authenticated;\n-- Read and update the same profile authority used by User\
+    \ Hub.\ncreate or replace function api.platform_users(p_user_id uuid default null,\
+    \ p_page integer default 1, p_per_page integer default 50)\nreturns jsonb language\
+    \ plpgsql stable security definer set search_path=pg_catalog,pg_temp as $$\ndeclare\
+    \ result jsonb;\nbegin\n if not core.has_platform_session(api.current_user_id())\
+    \ then raise exception 'platform session required' using errcode='42501';end if;\n\
+    \ if p_page is null or p_page<1 or p_page>10000 or p_per_page is null or p_per_page<1\
+    \ or p_per_page>100 then raise exception 'invalid pagination' using errcode='22023';end\
+    \ if;\n select coalesce(jsonb_agg(row), '[]'::jsonb) into result from (\n  select\
+    \ u.id,coalesce(u.email,'') as email,coalesce(p.display_name,'') as \"displayName\"\
+    ,u.created_at as \"createdAt\",\n   u.email_confirmed_at is not null as \"emailConfirmed\"\
+    ,false as deleted\n  from auth.users u left join core.user_profiles p on p.user_id=u.id\n\
+    \  where u.deleted_at is null and (p_user_id is null or u.id=p_user_id)\n  order\
+    \ by u.created_at,u.id limit p_per_page offset ((p_page-1)*p_per_page)\n ) row;\n\
+    \ if p_user_id is not null then\n  if jsonb_array_length(result)=0 then raise\
+    \ exception 'user not found' using errcode='P0002';end if;\n  return result->0;\n\
+    \ end if;\n return jsonb_build_object('users',result);\nend $$;\nalter function\
+    \ api.platform_users(uuid,integer,integer) owner to supabase_admin;\nrevoke all\
+    \ on function api.platform_users(uuid,integer,integer) from public,anon;\ngrant\
+    \ execute on function api.platform_users(uuid,integer,integer) to authenticated;\n\
+    \ncreate or replace function api.platform_user_update(p_user_id uuid,p_display_name\
+    \ text)\nreturns jsonb language plpgsql volatile security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\nbegin\n perform api.platform_users(p_user_id);\n if p_display_name is\
+    \ null or length(btrim(p_display_name)) not between 1 and 80 then raise exception\
+    \ 'invalid display name' using errcode='22023';end if;\n perform core.ensure_user_profile(p_user_id);\n\
+    \ update core.user_profiles set display_name=btrim(p_display_name),updated_at=now()\
+    \ where user_id=p_user_id;\n return api.platform_users(p_user_id);\nend $$;\n\
+    alter function api.platform_user_update(uuid,text) owner to supabase_admin;\n\
+    revoke all on function api.platform_user_update(uuid,text) from public,anon;\n\
+    grant execute on function api.platform_user_update(uuid,text) to authenticated;\n\
+    notify pgrst,'reload schema';\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-platform-admin-api-v5
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  migration.sql: "begin;\nupdate core.organizations set display_name = 'Re8CH Admin',\
+    \ updated_at = now() where tenant_ref = 'admin';\nupdate core.organizations set\
+    \ display_name = 'Re8ch', parent_ref = 'admin', updated_at = now() where tenant_ref\
+    \ = 're8ch';\n\ncreate table if not exists core.organization_context_audit (\n\
+    \  id bigint generated always as identity primary key,\n  actor_user_id uuid references\
+    \ auth.users(id) on delete set null,\n  source_tenant_ref text,\n  target_tenant_ref\
+    \ text,\n  action text not null,\n  before_state jsonb not null default '{}'::jsonb,\n\
+    \  after_state jsonb not null default '{}'::jsonb,\n  request_id text,\n  created_at\
+    \ timestamptz not null default now()\n);\nalter table core.organization_context_audit\
+    \ owner to supabase_admin;\nalter table core.organization_context_audit enable\
+    \ row level security;\nrevoke all on core.organization_context_audit from public,\
+    \ anon, authenticated, service_role;\n\n-- Membership is an entitlement, not the\
+    \ current request context. A user may\n-- belong to multiple organizations; user_active_organizations\
+    \ below selects\n-- the single organization whose resources are active for the\
+    \ session.\n\ncreate table if not exists core.user_active_organizations (\n  user_id\
+    \ uuid primary key references auth.users(id) on delete cascade,\n  tenant_ref\
+    \ text not null references core.organizations(tenant_ref),\n  updated_at timestamptz\
+    \ not null default now()\n);\nalter table core.user_active_organizations owner\
+    \ to supabase_admin;\nalter table core.user_active_organizations enable row level\
+    \ security;\nrevoke all on core.user_active_organizations from public, anon, authenticated,\
+    \ service_role;\n\ninsert into core.user_active_organizations(user_id, tenant_ref)\n\
+    select u.id, choice.tenant_ref from auth.users u\ncross join lateral (\n  select\
+    \ m.tenant_ref from core.organization_members m\n  join core.organizations o on\
+    \ o.tenant_ref = m.tenant_ref\n  where m.user_id = u.id and m.status = 'active'\
+    \ and o.status = 'active'\n  order by case when o.kind <> 'personal' then 0 else\
+    \ 1 end,\n    case m.tenant_ref when 'admin' then 0 when 're8ch' then 1 else 2\
+    \ end, m.tenant_ref\n  limit 1\n) choice\nwhere u.deleted_at is null on conflict\
+    \ (user_id) do nothing;\n\ncreate or replace function core.can_access_tenant_resources(p_user_id\
+    \ uuid, p_tenant_ref text)\nreturns boolean language sql stable security definer\
+    \ set search_path = pg_catalog, pg_temp as $$\n  select p_user_id = api.current_user_id()\
+    \ and exists (\n    select 1 from core.organization_members m\n    join core.organizations\
+    \ o on o.tenant_ref = m.tenant_ref\n    join core.user_active_organizations a\
+    \ on a.user_id = m.user_id and a.tenant_ref = m.tenant_ref\n    where m.user_id\
+    \ = p_user_id and m.tenant_ref = p_tenant_ref\n      and m.status = 'active' and\
+    \ o.status = 'active')\n$$;\nalter function core.can_access_tenant_resources(uuid,\
+    \ text) owner to supabase_admin;\nrevoke all on function core.can_access_tenant_resources(uuid,\
+    \ text) from public, anon, authenticated, service_role;\n\ndrop function if exists\
+    \ api.my_tenant_runtime_contexts();\ncreate function api.my_tenant_runtime_contexts()\n\
+    returns table(tenant_ref text, tenant_role text, tenant_kind text, display_name\
+    \ text, parent_ref text, is_active boolean)\nlanguage plpgsql volatile security\
+    \ definer set search_path = pg_catalog, pg_temp as $$\ndeclare v_user uuid :=\
+    \ api.current_user_id(); v_personal text; v_active text;\nbegin\n  if v_user is\
+    \ null then raise exception 'authenticated user required' using errcode = '28000';\
+    \ end if;\n  perform core.ensure_personal_organization(v_user);\n  update core.organization_members\
+    \ m set status = 'active', role = 'owner', updated_at = now()\n  from core.organizations\
+    \ o\n  where m.user_id = v_user and m.tenant_ref = o.tenant_ref\n    and o.kind\
+    \ = 'personal' and o.personal_owner_id = v_user and o.status = 'active'\n    and\
+    \ (m.status <> 'active' or m.role <> 'owner');\n  select o.tenant_ref into v_personal\
+    \ from core.organizations o\n  join core.organization_members m on m.tenant_ref\
+    \ = o.tenant_ref and m.user_id = v_user\n  where o.kind = 'personal' and o.personal_owner_id\
+    \ = v_user\n    and o.status = 'active' and m.status = 'active' order by o.created_at\
+    \ limit 1;\n  select a.tenant_ref into v_active from core.user_active_organizations\
+    \ a\n  join core.organization_members m on m.user_id = a.user_id and m.tenant_ref\
+    \ = a.tenant_ref\n  join core.organizations o on o.tenant_ref = a.tenant_ref\n\
+    \  where a.user_id = v_user and m.status = 'active' and o.status = 'active';\n\
+    \  if v_active is null and v_personal is not null then\n    insert into core.user_active_organizations(user_id,\
+    \ tenant_ref, updated_at)\n    values(v_user, v_personal, now()) on conflict (user_id)\
+    \ do update\n      set tenant_ref = excluded.tenant_ref, updated_at = excluded.updated_at;\n\
+    \    v_active := v_personal;\n  end if;\n  return query select m.tenant_ref,\n\
+    \    case m.role when 'owner' then 'admin' when 'admin' then 'admin'\n      when\
+    \ 'member' then 'operator' when 'viewer' then 'viewer' end,\n    o.kind, o.display_name,\
+    \ o.parent_ref, m.tenant_ref = v_active\n  from core.organization_members m join\
+    \ core.organizations o on o.tenant_ref = m.tenant_ref\n  join auth.users u on\
+    \ u.id = m.user_id\n  where m.user_id = v_user and m.status = 'active' and o.status\
+    \ = 'active'\n    and u.deleted_at is null and m.role in ('owner', 'admin', 'member',\
+    \ 'viewer')\n  order by (m.tenant_ref = v_active) desc, (o.kind = 'personal')\
+    \ desc, m.tenant_ref;\nend $$;\nalter function api.my_tenant_runtime_contexts()\
+    \ owner to supabase_admin;\nrevoke all on function api.my_tenant_runtime_contexts()\
+    \ from public, anon, service_role;\ngrant usage on schema api to authenticated;\n\
+    grant execute on function api.my_tenant_runtime_contexts() to authenticated;\n\
+    \ncreate or replace function api.select_active_organization(p_tenant_ref text)\n\
+    returns jsonb language plpgsql volatile security definer set search_path = pg_catalog,\
+    \ pg_temp as $$\ndeclare v_user uuid := api.current_user_id(); v_before text;\
+    \ v_request_id text;\nbegin\n  if v_user is null then raise exception 'authenticated\
+    \ user required' using errcode = '28000'; end if;\n  if not exists (select 1 from\
+    \ core.organization_members m\n    join core.organizations o on o.tenant_ref =\
+    \ m.tenant_ref\n    where m.user_id = v_user and m.tenant_ref = p_tenant_ref\n\
+    \      and m.status = 'active' and o.status = 'active') then\n    raise exception\
+    \ 'active organization membership required' using errcode = '42501';\n  end if;\n\
+    \  perform pg_advisory_xact_lock(hashtextextended('active-organization:' || v_user::text,\
+    \ 0));\n  select tenant_ref into v_before from core.user_active_organizations\
+    \ where user_id = v_user;\n  insert into core.user_active_organizations(user_id,\
+    \ tenant_ref, updated_at)\n  values(v_user, p_tenant_ref, now()) on conflict (user_id)\
+    \ do update\n    set tenant_ref = excluded.tenant_ref, updated_at = excluded.updated_at;\n\
+    \  v_request_id := coalesce(nullif(current_setting('request.headers', true), '')::jsonb\
+    \ ->> 'x-request-id', gen_random_uuid()::text);\n  insert into core.organization_context_audit(\n\
+    \    actor_user_id, source_tenant_ref, target_tenant_ref, action, before_state,\
+    \ after_state, request_id)\n  values(v_user, v_before, p_tenant_ref, 'active_organization_selected',\n\
+    \    jsonb_build_object('tenantRef', v_before), jsonb_build_object('tenantRef',\
+    \ p_tenant_ref), v_request_id);\n  return jsonb_build_object('tenantRef', p_tenant_ref,\
+    \ 'active', true, 'requestId', v_request_id);\nend $$;\nalter function api.select_active_organization(text)\
+    \ owner to supabase_admin;\nrevoke all on function api.select_active_organization(text)\
+    \ from public, anon, service_role;\ngrant execute on function api.select_active_organization(text)\
+    \ to authenticated;\nnotify pgrst, 'reload schema';\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-tenant-runtime-contexts-v4
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  migration.sql: "begin;\ncreate or replace function api.my_tenant_runtime_memberships()\n\
+    returns table(tenant_ref text, tenant_role text)\nlanguage sql stable security\
+    \ definer set search_path = pg_catalog, pg_temp\nas $$\n  select m.tenant_ref,\n\
+    \    case m.role\n      when 'owner' then 'admin'\n      when 'admin' then 'admin'\n\
+    \      when 'member' then 'operator'\n      when 'viewer' then 'viewer'\n    end\n\
+    \  from core.organization_members m\n  join core.organizations o on o.tenant_ref\
+    \ = m.tenant_ref\n  join auth.users u on u.id = m.user_id\n  where m.user_id =\
+    \ api.current_user_id()\n    and m.status = 'active' and o.status = 'active'\n\
+    \    and u.deleted_at is null\n    and m.role in ('owner', 'admin', 'member',\
+    \ 'viewer')\n$$;\nrevoke all on function api.my_tenant_runtime_memberships() from\
+    \ public, anon, service_role;\ngrant usage on schema api to authenticated;\ngrant\
+    \ execute on function api.my_tenant_runtime_memberships() to authenticated;\n\
+    alter function api.my_tenant_runtime_memberships() owner to supabase_admin;\n\
+    commit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-tenant-runtime-memberships-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: supabase-identity-quota
+  namespace: supabase-identity
+spec:
+  hard:
+    limits.cpu: 5000m
+    limits.memory: 12288Mi
+    requests.cpu: 1500m
+    requests.memory: 4096Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 3000
+  selector:
+    app.kubernetes.io/component: studio
+    app.kubernetes.io/part-of: supabase-identity
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-auth
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 9999
+    targetPort: 9999
+  selector:
+    app.kubernetes.io/component: auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-kong
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  selector:
+    app.kubernetes.io/component: kong
+    app.kubernetes.io/part-of: supabase-identity
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-meta
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/component: meta
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-realtime
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 4000
+    targetPort: 4000
+  selector:
+    app.kubernetes.io/component: realtime
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-rest
+  namespace: supabase-identity
+spec:
+  clusterIP: 10.43.201.43
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  selector:
+    app.kubernetes.io/component: rest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-rest-ro
+  namespace: supabase-identity
+spec:
+  clusterIP: 10.43.111.83
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  selector:
+    app.kubernetes.io/component: rest-ro
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-identity-studio
+  namespace: supabase-identity
+spec:
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  selector:
+    app.kubernetes.io/component: studio
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: re8ch-supabase-auth-db-rw
+  namespace: supabase-identity
+spec:
+  hostnames:
+  - db-rw.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-loudi
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-guangzhou
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-shanghai
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-hangzhou-nuclio
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-shanghai-nuclio
+    namespace: kube-system
+    sectionName: db-rw-https
+  rules:
+  - backendRefs:
+    - name: tenant-api
+      namespace: tenant-infrastructure
+      port: 80
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /oauth/token/compat
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /auth/v1/oauth/token
+  - backendRefs:
+    - name: supabase-identity-auth
+      port: 9999
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replacePrefixMatch: /
+          type: ReplacePrefixMatch
+    matches:
+    - path:
+        type: PathPrefix
+        value: /auth/v1
+  - backendRefs:
+    - name: supabase-identity-auth
+      port: 9999
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replaceFullPath: /.well-known/oauth-authorization-server
+          type: ReplaceFullPath
+    matches:
+    - path:
+        type: Exact
+        value: /.well-known/oauth-authorization-server/auth/v1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: supabase-identity-data-db-ro
+  namespace: supabase-identity
+spec:
+  hostnames:
+  - db-ro.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: db-ro-https
+  rules:
+  - backendRefs:
+    - name: supabase-identity-rest-ro
+      port: 3000
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replacePrefixMatch: /
+          type: ReplacePrefixMatch
+    matches:
+    - path:
+        type: PathPrefix
+        value: /identity/rest/v1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: supabase-identity-data-db-rw
+  namespace: supabase-identity
+spec:
+  hostnames:
+  - db-rw.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-loudi
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-guangzhou
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-shanghai
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-hangzhou-nuclio
+    namespace: kube-system
+    sectionName: db-rw-https
+  - name: re8ch-region-shanghai-nuclio
+    namespace: kube-system
+    sectionName: db-rw-https
+  rules:
+  - backendRefs:
+    - name: supabase-identity-rest
+      port: 3000
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          replacePrefixMatch: /
+          type: ReplacePrefixMatch
+    matches:
+    - path:
+        type: PathPrefix
+        value: /identity/rest/v1
+  - backendRefs:
+    - name: supabase-identity-kong
+      port: 8000
+    matches:
+    - path:
+        type: PathPrefix
+        value: /realtime/v1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: supabase-identity-studio-http-redirect
+  namespace: supabase-identity
+spec:
+  hostnames:
+  - supabase.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: http
+  rules:
+  - filters:
+    - requestRedirect:
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: supabase-identity-studio-public
+  namespace: supabase-identity
+spec:
+  hostnames:
+  - supabase.re8ch.com
+  parentRefs:
+  - name: re8ch-gateway-canary
+    namespace: kube-system
+    sectionName: supabase-https
+  rules:
+  - backendRefs:
+    - name: supabase-identity-kong
+      port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: allow-auth-route-to-supabase-auth
+  namespace: supabase-identity
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: auth
+  to:
+  - group: ''
+    kind: Service
+    name: supabase-identity-auth
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: 'false'
+    external-dns.alpha.kubernetes.io/hostname: supabase.re8ch.com
+    external-dns.alpha.kubernetes.io/target: 223.159.210.222
+    external-dns.alpha.kubernetes.io/ttl: '60'
+    networking.re8ch.com/provider: public-edge-manager
+  labels:
+    networking.re8ch.com/dns-authority: public-edge
+  name: supabase-identity-studio-dns
+  namespace: supabase-identity
+spec:
+  ingressClassName: external-dns-only
+  rules:
+  - host: supabase.re8ch.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: supabase-identity-kong
+            port:
+              number: 8000
+        path: /
+        pathType: Prefix
