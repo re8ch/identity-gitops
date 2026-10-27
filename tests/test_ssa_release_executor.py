@@ -398,3 +398,106 @@ def test_archive_path_or_extra_member_is_rejected(tmp_path):
     path.write_bytes(gzip.compress(raw.getvalue()))
     with pytest.raises(executor.Rejected, match="unexpected archive members"):
         executor.load_archive(path)
+
+
+@pytest.mark.parametrize("fault", [None, "blocked", "suspended", "healthyDigest", "releaseId", "bundleReference", "inventoryDigest", "namespace"])
+def test_replay_resolves_only_target_bound_healthy_acceptance(tmp_path, fault):
+    import yaml
+    value, operation, bundle_path = prepare(tmp_path)
+    instance = executor.Executor(runner=Runner(), now=lambda: NOW, sleeper=lambda _: None)
+    instance.reconcile(value, operation, bundle_path, tmp_path / "state", verify_signature=False)
+    state = executor.Store(tmp_path / "state", "demo").state()
+    state["bundleReference"] = "oci://ghcr.io/re8ch/identity-gitops-release/demo"
+    if fault in {"blocked", "suspended"}:
+        state[fault] = True
+    elif fault in {"healthyDigest", "inventoryDigest"}:
+        state[fault] = "sha256:" + "f" * 64
+    elif fault == "releaseId":
+        state[fault] = "another-release"
+    elif fault == "bundleReference":
+        state[fault] = "oci://untrusted.example/demo"
+    cm = {"metadata": {"name": "ssa-state-demo", "namespace": "other" if fault == "namespace" else "demo"},
+          "data": {"accepted-state.json": json.dumps(state)}}
+    cm_path = tmp_path / "cm.json"
+    cm_path.write_text(json.dumps(cm))
+    contract_path = tmp_path / "contract.yaml"
+    contract_path.write_text(yaml.safe_dump(value))
+    if fault:
+        with pytest.raises(ValueError):
+            materialize.accepted_bundle(cm_path, contract_path)
+    else:
+        assert materialize.accepted_bundle(cm_path, contract_path) == {
+            "reference": state["bundleReference"], "digest": state["appliedDigest"]}
+
+
+def test_state_patch_does_not_write_unchanged_state_after_rejection(tmp_path):
+    value, operation, bundle_path = prepare(tmp_path)
+    root = tmp_path / "state"
+    result = executor.Executor(runner=Runner(), now=lambda: NOW).reconcile(
+        value, operation, bundle_path, root, verify_signature=False)
+    state = executor.Store(root, "demo").state()
+    cm_path = tmp_path / "cm.json"
+    cm_path.write_text(json.dumps({"metadata": {"name": "ssa-state-demo", "resourceVersion": "72"},
+                                  "data": {"accepted-state.json": json.dumps(state), "last-result.json": json.dumps(result)}}))
+    result_path = tmp_path / "result.json"
+    result_path.write_text("")
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text("stale patch from earlier attempt")
+    materialize.state_patch(cm_path, root, "demo", result_path, patch_path)
+    assert not patch_path.exists()
+
+
+def test_state_patch_persists_new_result_with_original_version(tmp_path):
+    value, operation, bundle_path = prepare(tmp_path)
+    root = tmp_path / "state"
+    instance = executor.Executor(runner=Runner(), now=lambda: NOW)
+    first = instance.reconcile(value, operation, bundle_path, root, verify_signature=False)
+    previous = executor.Store(root, "demo").state()
+    cm_path = tmp_path / "cm.json"
+    cm_path.write_text(json.dumps({"metadata": {"name": "ssa-state-demo", "resourceVersion": "73"},
+                                  "data": {"accepted-state.json": json.dumps(previous), "last-result.json": json.dumps(first)}}))
+    _, replay, _ = prepare(tmp_path, sequence=2, previous=previous["appliedDigest"])
+    result = instance.reconcile(value, replay, bundle_path, root, verify_signature=False)
+    result_path = tmp_path / "result.json"
+    result_path.write_text(json.dumps(result))
+    patch_path = tmp_path / "patch.json"
+    materialize.state_patch(cm_path, root, "demo", result_path, patch_path)
+    patch = json.loads(patch_path.read_text())
+    assert patch["metadata"]["resourceVersion"] == "73"
+    assert json.loads(patch["data"]["accepted-state.json"])["sequence"] == 2
+    assert json.loads(patch["data"]["last-result.json"]) == result
+
+
+def test_failed_rollback_remains_blocked_on_next_cloud_worker(tmp_path, monkeypatch):
+    value, operation, bundle_path = prepare(tmp_path)
+    state_root = tmp_path / "state"
+    instance = executor.Executor(runner=Runner(), now=lambda: NOW, sleeper=lambda _: None)
+    instance.reconcile(value, operation, bundle_path, state_root, verify_signature=False)
+    previous = executor.Store(state_root, "demo").state()
+    cm = {"metadata": {"name": "ssa-state-demo", "namespace": "demo", "resourceVersion": "71"},
+          "data": {"accepted-state.json": json.dumps(previous)}}
+    cm_path = tmp_path / "original-cm.json"
+    cm_path.write_text(json.dumps(cm))
+    _, replay, _ = prepare(tmp_path, sequence=2, previous=previous["appliedDigest"])
+    monkeypatch.setattr(instance, "wait_healthy", lambda *args: (False, "not ready"))
+    def failed_rollback(*args):
+        raise executor.Rejected("previous artifact could not recover health")
+    monkeypatch.setattr(instance, "rollback", failed_rollback)
+    with pytest.raises(executor.Rejected, match="rollback failed"):
+        instance.reconcile(value, replay, bundle_path, state_root, verify_signature=False)
+    result_path = tmp_path / "result.json"
+    result_path.write_text("")  # CLI failed before producing a successful result.
+    patch_path = tmp_path / "patch.json"
+    materialize.state_patch(cm_path, state_root, "demo", result_path, patch_path)
+    patch = json.loads(patch_path.read_text())
+    assert patch["metadata"] == {"resourceVersion": "71"}
+    assert set(patch["data"]) == {"accepted-state.json"}
+    assert json.loads(patch["data"]["accepted-state.json"])["blocked"] is True
+    cm["data"].update(patch["data"])
+    cm_path.write_text(json.dumps(cm))
+    next_root = tmp_path / "fresh-cloud-worker"
+    materialize.hydrate(cm_path, next_root, "demo")
+    runner = Runner()
+    with pytest.raises(executor.Rejected, match="release is blocked"):
+        executor.Executor(runner=runner, now=lambda: NOW).reconcile(value, replay, bundle_path, next_root)
+    assert runner.calls == []
