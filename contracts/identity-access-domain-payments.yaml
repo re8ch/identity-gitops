@@ -1,0 +1,67 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-domain-payments
+spec:
+  authorityDomain: identity-access
+  target:
+    cluster: re8ch
+    namespace: payments
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-domain-payments
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/main-commerce-billing-payments
+    resources:
+    - apps/Deployment
+    - core/ConfigMap
+    - core/PersistentVolumeClaim
+    - core/Service
+    - gateway.networking.k8s.io/HTTPRoute
+    objectNames:
+    - commerce-api
+    - commerce-db-ro
+    - commerce-db-rw
+    - commerce-postgrest-ro
+    - commerce-postgrest-rw
+    - commerce-public-api
+    - hyperswitch-control-center-public
+    - hyperswitch-router-public
+    - hyperswitch-superposition-local-key
+    - hyperswitch-superposition-schema
+    - hyperswitch-superposition-seed
+    - hyperswitch-web
+    - hyperswitch-web-public
+    - nuclio-payment-registry-api
+    - payment-postgrest
+    - payment-postgrest-ro
+    - payment-postgrest-rw
+    - re8ch-catalog
+    - re8ch-catalog-public
+    - re8ch-payment-registry-auth-center
+    - re8ch-payment-registry-public
+    allowClusterScoped: false
+    requireExisting: true
+    forceConflictObjects: []
+  inventory:
+    digest: sha256:ee65067de8ef6ec5a9b0493ddc2e41048d135ede16c74b9a48f742f17f384c99
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 300
+    protectedKinds:
+    - Namespace
+    - CustomResourceDefinition
+    - PersistentVolume
+    - PersistentVolumeClaim
+    - StorageClass
+    deletionAllowlist: []

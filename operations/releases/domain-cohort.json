@@ -1,6 +1,6 @@
 {
   "domain": "identity-access",
-  "sourceObjects": 298,
+  "sourceObjects": 327,
   "releases": [
     {
       "name": "identity-access-domain-ai-operations",
@@ -25,6 +25,12 @@
       "namespace": "opensandbox-system",
       "objects": 4,
       "contract": "contracts/identity-access-domain-opensandbox-system.yaml"
+    },
+    {
+      "name": "identity-access-domain-payments",
+      "namespace": "payments",
+      "objects": 28,
+      "contract": "contracts/identity-access-domain-payments.yaml"
     },
     {
       "name": "identity-access-domain-re8ch-anysite",
@@ -69,13 +75,19 @@
       "contract": "contracts/identity-access-domain-supabase-identity.yaml"
     },
     {
+      "name": "identity-access-domain-supabase-pg-re8ch",
+      "namespace": "supabase-pg-re8ch",
+      "objects": 1,
+      "contract": "contracts/identity-access-domain-supabase-pg-re8ch.yaml"
+    },
+    {
       "name": "identity-access-domain-tenant-infrastructure",
       "namespace": "tenant-infrastructure",
       "objects": 2,
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 191,
+  "publishableObjects": 220,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
