@@ -35,8 +35,6 @@ spec:
     - gateway.networking.k8s.io/HTTPRoute
     - gateway.networking.k8s.io/TCPRoute
     - networking.k8s.io/Ingress
-    - rbac.authorization.k8s.io/Role
-    - rbac.authorization.k8s.io/RoleBinding
     objectNames:
     - stalwart
     - stalwart-admin-public
@@ -45,7 +43,6 @@ spec:
     - stalwart-bootstrap-reconciler-v10
     - stalwart-bot-access-contract
     - stalwart-cloudflare-token-sync
-    - stalwart-cloudflare-token-target
     - stalwart-collaboration-public
     - stalwart-collaboration-public-dns
     - stalwart-collaboration-redirect
@@ -71,7 +68,6 @@ spec:
     - stalwart-imaps-public-v2
     - stalwart-mail-re8ch
     - stalwart-mailbox-provisioner
-    - stalwart-mailbox-provisioner-secrets
     - stalwart-phonaid-domain-plan
     - stalwart-sieve-public-v2
     - stalwart-smtp-public-v2
@@ -139,12 +135,8 @@ spec:
     - networking.k8s.io/Ingress/mail-system/stalwart-collaboration-public-dns
     - networking.k8s.io/Ingress/mail-system/stalwart-idp-public-dns
     - networking.k8s.io/Ingress/mail-system/stalwart-webmail-public
-    - rbac.authorization.k8s.io/Role/mail-system/stalwart-cloudflare-token-target
-    - rbac.authorization.k8s.io/Role/mail-system/stalwart-mailbox-provisioner-secrets
-    - rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-cloudflare-token-target
-    - rbac.authorization.k8s.io/RoleBinding/mail-system/stalwart-mailbox-provisioner-secrets
   inventory:
-    digest: sha256:abee8aab82c89f0e21a80b19ffd1804bfe25c001e0ede8f4a2ad38f32b2b0ec2
+    digest: sha256:7e1ddf1c7a9728fc97f091c4a1e8436b93accba85b510f927bfff5bf6e348aaa
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300
