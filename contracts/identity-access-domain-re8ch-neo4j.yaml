@@ -42,14 +42,9 @@ spec:
     - neo4j-config
     - plugins-neo4j-0
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - core/ConfigMap/re8ch-neo4j/neo4j-config
-    - core/PersistentVolumeClaim/re8ch-neo4j/data-ledger-casegraph-0
-    - core/PersistentVolumeClaim/re8ch-neo4j/data-ledger-economicsgraph-0
-    - core/PersistentVolumeClaim/re8ch-neo4j/data-neo4j-0
-    - core/PersistentVolumeClaim/re8ch-neo4j/ledger-casegraph-backups
-    - core/PersistentVolumeClaim/re8ch-neo4j/ledger-economicsgraph-backups
-    - core/PersistentVolumeClaim/re8ch-neo4j/plugins-neo4j-0
     - core/Service/re8ch-neo4j/ledger-casegraph
     - core/Service/re8ch-neo4j/ledger-economicsgraph
     - core/Service/re8ch-neo4j/neo4j

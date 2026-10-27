@@ -26,7 +26,6 @@ spec:
     - apps/Deployment
     - apps/StatefulSet
     - batch/CronJob
-    - batch/Job
     - cert-manager.io/Certificate
     - core/ConfigMap
     - core/PersistentVolumeClaim
@@ -40,7 +39,6 @@ spec:
     - stalwart-admin-public
     - stalwart-admin-redirect
     - stalwart-bootstrap-plan
-    - stalwart-bootstrap-reconciler-v10
     - stalwart-bot-access-contract
     - stalwart-cloudflare-token-sync
     - stalwart-collaboration-public
@@ -51,17 +49,14 @@ spec:
     - stalwart-flk
     - stalwart-flk-data
     - stalwart-flk-local-data
-    - stalwart-flk-migration-v2
     - stalwart-harry-admin-alias-v1
     - stalwart-headless
     - stalwart-idp
     - stalwart-idp-bootstrap-plan-v6
-    - stalwart-idp-bootstrap-v6
     - stalwart-idp-config
     - stalwart-idp-flk
     - stalwart-idp-flk-data
     - stalwart-idp-flk-local-data
-    - stalwart-idp-flk-migration-v2
     - stalwart-idp-public
     - stalwart-idp-public-dns
     - stalwart-idp-redirect
@@ -75,13 +70,12 @@ spec:
     - stalwart-submission-public-v2
     - stalwart-tls-reloader
     - stalwart-unified-identity-bootstrap-plan-v2
-    - stalwart-unified-identity-bootstrap-v2
     - stalwart-userhub-oauth-plan-v1
-    - stalwart-userhub-oauth-v2
     - stalwart-webmail
     - stalwart-webmail-public
     - stalwart-webmail-redirect
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/Deployment/mail-system/stalwart-webmail
     - apps/StatefulSet/mail-system/stalwart-flk
@@ -89,13 +83,6 @@ spec:
     - batch/CronJob/mail-system/stalwart-cloudflare-token-sync
     - batch/CronJob/mail-system/stalwart-mailbox-provisioner
     - batch/CronJob/mail-system/stalwart-tls-reloader
-    - batch/Job/mail-system/stalwart-bootstrap-reconciler-v10
-    - batch/Job/mail-system/stalwart-flk-migration-v2
-    - batch/Job/mail-system/stalwart-harry-admin-alias-v1
-    - batch/Job/mail-system/stalwart-idp-bootstrap-v6
-    - batch/Job/mail-system/stalwart-idp-flk-migration-v2
-    - batch/Job/mail-system/stalwart-unified-identity-bootstrap-v2
-    - batch/Job/mail-system/stalwart-userhub-oauth-v2
     - cert-manager.io/Certificate/mail-system/stalwart-mail-re8ch
     - core/ConfigMap/mail-system/stalwart-bootstrap-plan
     - core/ConfigMap/mail-system/stalwart-bot-access-contract
@@ -108,10 +95,6 @@ spec:
     - core/ConfigMap/mail-system/stalwart-phonaid-domain-plan
     - core/ConfigMap/mail-system/stalwart-unified-identity-bootstrap-plan-v2
     - core/ConfigMap/mail-system/stalwart-userhub-oauth-plan-v1
-    - core/PersistentVolumeClaim/mail-system/stalwart-flk-data
-    - core/PersistentVolumeClaim/mail-system/stalwart-flk-local-data
-    - core/PersistentVolumeClaim/mail-system/stalwart-idp-flk-data
-    - core/PersistentVolumeClaim/mail-system/stalwart-idp-flk-local-data
     - core/Service/mail-system/stalwart
     - core/Service/mail-system/stalwart-direct-mail
     - core/Service/mail-system/stalwart-headless
@@ -136,7 +119,7 @@ spec:
     - networking.k8s.io/Ingress/mail-system/stalwart-idp-public-dns
     - networking.k8s.io/Ingress/mail-system/stalwart-webmail-public
   inventory:
-    digest: sha256:7e1ddf1c7a9728fc97f091c4a1e8436b93accba85b510f927bfff5bf6e348aaa
+    digest: sha256:0ab9d21b1a88399364341e1e5ea585f36aebe8f71adb0d71808b8349bbf5e237
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300

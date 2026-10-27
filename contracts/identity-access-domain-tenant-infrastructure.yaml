@@ -29,6 +29,7 @@ spec:
     - allow-db-rw-auth-route-to-tenant-api
     - identity-dependency-preflight
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - gateway.networking.k8s.io/ReferenceGrant/tenant-infrastructure/allow-db-rw-auth-route-to-tenant-api
     - networking.k8s.io/NetworkPolicy/tenant-infrastructure/identity-dependency-preflight

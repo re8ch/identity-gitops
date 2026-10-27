@@ -393,22 +393,6 @@ rules:
   - patch
   - update
 - apiGroups:
-  - batch
-  resources:
-  - jobs
-  resourceNames:
-  - stalwart-bootstrap-reconciler-v10
-  - stalwart-flk-migration-v2
-  - stalwart-harry-admin-alias-v1
-  - stalwart-idp-bootstrap-v6
-  - stalwart-idp-flk-migration-v2
-  - stalwart-unified-identity-bootstrap-v2
-  - stalwart-userhub-oauth-v2
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - cert-manager.io
   resources:
   - certificates
@@ -973,17 +957,6 @@ rules:
   - patch
   - update
 - apiGroups:
-  - batch
-  resources:
-  - jobs
-  resourceNames:
-  - secretary-channel-registry-v2
-  - secretary-register-v0-3-3
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - cilium.io
   resources:
   - ciliumnetworkpolicies
@@ -1248,17 +1221,6 @@ rules:
   - supabase-identity-realtime
   - supabase-identity-rest
   - supabase-identity-rest-ro
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  resourceNames:
-  - supabase-identity-privacy-v1
-  - supabase-platform-admin-api-v5
   verbs:
   - get
   - patch

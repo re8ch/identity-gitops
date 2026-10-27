@@ -30,6 +30,7 @@ spec:
     objectNames:
     - opensandbox-orchestra-proxy
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/Deployment/opensandbox-system/opensandbox-orchestra-proxy
     - core/ConfigMap/opensandbox-system/opensandbox-orchestra-proxy

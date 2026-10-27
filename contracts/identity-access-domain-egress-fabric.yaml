@@ -83,6 +83,7 @@ spec:
     - personal-access-us-la
     - personal-access-us-la-public
     allowClusterScoped: false
+    requireExisting: true
     forceConflictObjects:
     - apps/DaemonSet/egress-fabric/edge-access-anytls
     - apps/Deployment/egress-fabric/access-adguard
@@ -105,8 +106,6 @@ spec:
     - core/ConfigMap/egress-fabric/access-subscription-code-9b5k4f4ddb
     - core/ConfigMap/egress-fabric/edge-access-anytls
     - core/ConfigMap/egress-fabric/personal-access-mihomo
-    - core/PersistentVolumeClaim/egress-fabric/access-adguard-data
-    - core/PersistentVolumeClaim/egress-fabric/access-rule-cache
     - core/Service/egress-fabric/access-dns
     - core/Service/egress-fabric/access-dns-admin
     - core/Service/egress-fabric/access-subscription
