@@ -5478,6 +5478,22 @@ spec:
     sectionName: db-ro-https
   rules:
   - backendRefs:
+    - name: commerce-api
+      port: 8080
+    matches:
+    - method: GET
+      path:
+        type: PathPrefix
+        value: /commerce/v1
+    - method: HEAD
+      path:
+        type: PathPrefix
+        value: /commerce/v1
+    - method: OPTIONS
+      path:
+        type: PathPrefix
+        value: /commerce/v1
+  - backendRefs:
     - name: commerce-postgrest-ro
       port: 3000
     filters:
@@ -5698,6 +5714,22 @@ spec:
     sectionName: db-ro-https
   rules:
   - backendRefs:
+    - name: nuclio-payment-registry-api
+      port: 8080
+    matches:
+    - method: GET
+      path:
+        type: PathPrefix
+        value: /payment/v1
+    - method: HEAD
+      path:
+        type: PathPrefix
+        value: /payment/v1
+    - method: OPTIONS
+      path:
+        type: PathPrefix
+        value: /payment/v1
+  - backendRefs:
     - name: payment-postgrest-ro
       port: 3000
     filters:
@@ -5739,6 +5771,34 @@ spec:
     namespace: kube-system
     sectionName: db-rw-https
   rules:
+  - backendRefs:
+    - name: nuclio-payment-registry-api
+      port: 8080
+    matches:
+    - method: POST
+      path:
+        type: Exact
+        value: /payment/v1/credits/wallets
+    - method: OPTIONS
+      path:
+        type: Exact
+        value: /payment/v1/credits/wallets
+    - method: POST
+      path:
+        type: Exact
+        value: /payment/v1/credits/services
+    - method: OPTIONS
+      path:
+        type: Exact
+        value: /payment/v1/credits/services
+    - method: POST
+      path:
+        type: Exact
+        value: /payment/v1/credits/service-prices
+    - method: OPTIONS
+      path:
+        type: Exact
+        value: /payment/v1/credits/service-prices
   - backendRefs:
     - name: payment-postgrest
       port: 3000

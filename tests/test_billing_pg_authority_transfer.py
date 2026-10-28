@@ -15,7 +15,29 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
     source = list(yaml.safe_load_all(original))
     target = list(yaml.safe_load_all((ROOT / f'releases/identity-access-domain-{namespace}/resources.yaml').read_text()))
     identity = lambda obj: (obj['apiVersion'], obj['kind'], obj['metadata']['namespace'], obj['metadata']['name'])
-    assert {identity(obj): obj for obj in source} == {identity(obj): obj for obj in target}
+    source_objects = {identity(obj): obj for obj in source}
+    target_objects = {identity(obj): obj for obj in target}
+    assert source_objects.keys() == target_objects.keys()
+    read_routes = {'commerce-db-ro': ('/commerce/v1', 'commerce-api'),
+                   'payment-postgrest-ro': ('/payment/v1', 'nuclio-payment-registry-api')}
+    for key, original in source_objects.items():
+        current = target_objects[key]
+        assert current == original
+        if namespace == 'payments' and key[1] == 'HTTPRoute' and key[3] in read_routes:
+            prefix, service = read_routes[key[3]]
+            assert current['spec']['rules'][0]['backendRefs'] == [{'name': service, 'port': 8080}]
+            assert {match['method'] for match in current['spec']['rules'][0]['matches']} == {'GET', 'HEAD', 'OPTIONS'}
+            assert all(match['path'] == {'type': 'PathPrefix', 'value': prefix}
+                       for match in current['spec']['rules'][0]['matches'])
+        elif namespace == 'payments' and key[1] == 'HTTPRoute' and key[3] == 'payment-postgrest-rw':
+            assert current['spec']['rules'][0]['backendRefs'] == [{'name': 'nuclio-payment-registry-api', 'port': 8080}]
+            matches = current['spec']['rules'][0]['matches']
+            assert {(match['method'], match['path']['value']) for match in matches} == {
+                (method, '/payment/v1/credits/' + suffix)
+                for method in ('POST', 'OPTIONS')
+                for suffix in ('wallets', 'services', 'service-prices')
+            }
+            assert all(match['path']['type'] == 'Exact' for match in matches)
     assert len(target) == count
     assert not {'Secret', 'Role', 'RoleBinding', 'Job'} & {obj['kind'] for obj in target}
     contract = yaml.safe_load((ROOT / f'contracts/identity-access-domain-{namespace}.yaml').read_text())['spec']
