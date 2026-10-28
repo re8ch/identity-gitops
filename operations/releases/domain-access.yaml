@@ -499,8 +499,6 @@ rules:
   - payment-postgrest-rw
   - re8ch-catalog-public
   - re8ch-payment-registry-auth-center
-  - re8ch-payment-registry-db-ro
-  - re8ch-payment-registry-db-rw
   - re8ch-payment-registry-public
   verbs:
   - get
