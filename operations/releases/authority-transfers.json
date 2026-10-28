@@ -6,7 +6,7 @@
     "previousSourceCommit": "4830d8216742524ebeb3be8bbeb6c4cb8c8b9b28",
     "fieldManager": "re8ch-release/main-commerce-billing-payments",
     "sourcePath": "clusters/re8ch/payments-authority-resources.yaml",
-    "sourceDigest": "sha256:1999d19218a00c69530ebd4298037b793f24e11eca734473ad2ae8cb214f1e41",
+    "sourceDigest": "sha256:22056298fd455cc8ac3b1bec0955071956f3e50897e55d0fc88a1682dddd2528",
     "mode": "authority-only-existing-payload"
   },
   "supabase-pg-re8ch": {
