@@ -49,14 +49,12 @@ spec:
     - re8ch-catalog
     - re8ch-catalog-public
     - re8ch-payment-registry-auth-center
-    - re8ch-payment-registry-db-ro
-    - re8ch-payment-registry-db-rw
     - re8ch-payment-registry-public
     allowClusterScoped: false
     requireExisting: true
     forceConflictObjects: []
   inventory:
-    digest: sha256:b0428331684d95e8972dfbcaf06963cc82117f4409b2c48c5b7f298882abfa19
+    digest: sha256:ee65067de8ef6ec5a9b0493ddc2e41048d135ede16c74b9a48f742f17f384c99
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300

@@ -1,6 +1,6 @@
 {
   "domain": "identity-access",
-  "sourceObjects": 329,
+  "sourceObjects": 327,
   "releases": [
     {
       "name": "identity-access-domain-ai-operations",
@@ -29,7 +29,7 @@
     {
       "name": "identity-access-domain-payments",
       "namespace": "payments",
-      "objects": 30,
+      "objects": 28,
       "contract": "contracts/identity-access-domain-payments.yaml"
     },
     {
@@ -87,7 +87,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 222,
+  "publishableObjects": 220,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
