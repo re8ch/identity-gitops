@@ -5478,6 +5478,16 @@ spec:
     sectionName: db-ro-https
   rules:
   - backendRefs:
+    - name: commerce-api
+      port: 8080
+    matches:
+    - method: GET
+      path: {type: PathPrefix, value: /commerce/v1}
+    - method: HEAD
+      path: {type: PathPrefix, value: /commerce/v1}
+    - method: OPTIONS
+      path: {type: PathPrefix, value: /commerce/v1}
+  - backendRefs:
     - name: commerce-postgrest-ro
       port: 3000
     filters:
@@ -5697,6 +5707,16 @@ spec:
     namespace: kube-system
     sectionName: db-ro-https
   rules:
+  - backendRefs:
+    - name: nuclio-payment-registry-api
+      port: 8080
+    matches:
+    - method: GET
+      path: {type: PathPrefix, value: /payment/v1}
+    - method: HEAD
+      path: {type: PathPrefix, value: /payment/v1}
+    - method: OPTIONS
+      path: {type: PathPrefix, value: /payment/v1}
   - backendRefs:
     - name: payment-postgrest-ro
       port: 3000
