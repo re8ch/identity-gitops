@@ -7,8 +7,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize('namespace,count', [('payments', 28), ('supabase-pg-re8ch', 1)])
-def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, count):
+@pytest.mark.parametrize('namespace,count', [('payments', 30), ('supabase-pg-re8ch', 1)])
+def test_transfer_uses_reviewed_authority_payload_without_new_jobs(namespace, count):
     transfer = json.loads((ROOT / 'operations/releases/authority-transfers.json').read_text())[namespace]
     original = (ROOT / transfer['sourcePath']).read_bytes()
     assert 'sha256:' + hashlib.sha256(original).hexdigest() == transfer['sourceDigest']
