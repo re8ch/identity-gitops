@@ -31,7 +31,7 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
         item
         for item in documents
         if item["kind"] == "Job"
-        and item["metadata"]["name"] == "stalwart-userhub-oauth-v3"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v4"
     )
     plan_volume = next(
         item for item in job["spec"]["template"]["spec"]["volumes"]
