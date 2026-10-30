@@ -12741,7 +12741,7 @@ spec:
             name: app
           - image:
               pullPolicy: IfNotPresent
-              reference: ghcr.io/stalwartlabs/cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+              reference: ghcr.io/stalwartlabs/cli@sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1
             name: cli
           - emptyDir: {}
             name: cache
@@ -12815,7 +12815,7 @@ spec:
           volumes:
           - image:
               pullPolicy: IfNotPresent
-              reference: ghcr.io/stalwartlabs/cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+              reference: ghcr.io/stalwartlabs/cli@sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1
             name: cli
           - emptyDir: {}
             name: cache
@@ -12915,7 +12915,7 @@ spec:
         name: plan
       - image:
           pullPolicy: IfNotPresent
-          reference: ghcr.io/stalwartlabs/cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+          reference: ghcr.io/stalwartlabs/cli@sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1
         name: cli
       - emptyDir: {}
         name: cache
@@ -13124,7 +13124,7 @@ spec:
         name: cache
       - image:
           pullPolicy: IfNotPresent
-          reference: ghcr.io/stalwartlabs/cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+          reference: ghcr.io/stalwartlabs/cli@sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1
         name: cli
   ttlSecondsAfterFinished: 604800
 ---
@@ -13277,7 +13277,7 @@ spec:
         name: cache
       - image:
           pullPolicy: IfNotPresent
-          reference: ghcr.io/stalwartlabs/cli@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+          reference: ghcr.io/stalwartlabs/cli@sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1
         name: cli
   ttlSecondsAfterFinished: 604800
 ---
