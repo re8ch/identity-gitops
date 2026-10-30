@@ -1,9 +1,43 @@
 from pathlib import Path
+import json
 
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
+    documents = [
+        item
+        for item in yaml.safe_load_all(
+            (ROOT / "clusters/re8ch/stalwart-userhub-oauth.yaml").read_text()
+        )
+        if item
+    ]
+    plan = next(
+        item
+        for item in documents
+        if item["kind"] == "ConfigMap"
+        and item["metadata"]["namespace"] == "mail-system"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-plan-v1"
+    )
+    directory = json.loads(plan["data"]["plan.ndjson"].splitlines()[0])
+    broker = directory["value"]["re8ch-enterprise-sso"]
+    assert broker["issuerUrl"] == "https://auth.re8ch.com"
+    assert broker["requireAudience"] == "stalwart-webui"
+
+    job = next(
+        item
+        for item in documents
+        if item["kind"] == "Job"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v3"
+    )
+    plan_volume = next(
+        item for item in job["spec"]["template"]["spec"]["volumes"]
+        if item["name"] == "plan"
+    )
+    assert plan_volume["configMap"]["name"] == plan["metadata"]["name"]
 
 
 def test_webmail_uses_resilient_dns_for_oauth_and_jmap():
