@@ -24,11 +24,12 @@ GitHub Project 管理状态、负责人和后续任务；此目录管理可评�
 
 - workspace doctor 通过；使用独立 task worktree，从目标仓库 `origin/main` 创建（该 remote 指向 GitHub）。
 - 三个 agent 分别编写用例、体验基线、模拟工具，主 agent 汇总与检查。
-- GitHub 已安装的 Maintenance App 具备 `organization_projects:write`、`contents:write`、`pull_requests:write`；只读核对并未授予新权限。当前 CLI 为个人 OAuth，App 短期 token 执行入口尚待确认。
+- GitHub 已安装的 Maintenance App 具备 `organization_projects:write`、`contents:write`、`pull_requests:write`；只读核对并未授予新权限。本次用户明确批准使用当前 `gh` 登录身份执行 Project/PR 操作；后续自动化仍使用现有 App 边界。
 - LiteLLM 健康检查成功不代表有推理调用授权；当前插件没有推理工具，真实模型调用待批准入口与模型别名。
 - 浏览器工具报告 Work 设置禁用本地浏览器；本次没有真实页面点击或登录流程成功证据。
 - 初稿包含 23 个用例、5 个统一编号的行为人格和 5 个模拟场景。UC-14/UC-20 为条件 P0，只有相关能力进入发布范围才启用门槛。
-- 本地验证：6 项模拟证据契约测试通过；5 场景 dry-run 全部标记未执行；Identity 策略校验通过（294 个对象）；Kustomize 渲染与 diff whitespace 检查通过。GitHub Actions 尚未运行，Project/PR 尚未创建，不能视为交付上线。
+- 本地验证：6 项模拟证据契约测试通过；5 场景 dry-run 全部标记未执行；Identity 策略校验通过（294 个对象）；Kustomize 渲染与 diff whitespace 检查通过。GitHub Actions 尚待 PR 检查；不能视为交付上线。
+- 已创建私有 [Identity v1 用户体验研究 Project](https://github.com/orgs/re8ch/projects/3)，关联本仓库，并建立 10 个带优先级、前后台范围、证据级别及验收条件的研究任务。R08（LiteLLM 接口与试验）正在进行，其余待执行。
 
 ## GitHub 原生能力依据
 
