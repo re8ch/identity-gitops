@@ -31,13 +31,21 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
         item
         for item in documents
         if item["kind"] == "Job"
-        and item["metadata"]["name"] == "stalwart-userhub-oauth-v4"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v5"
     )
     plan_volume = next(
         item for item in job["spec"]["template"]["spec"]["volumes"]
         if item["name"] == "plan"
     )
     assert plan_volume["configMap"]["name"] == plan["metadata"]["name"]
+    cli_volume = next(
+        item for item in job["spec"]["template"]["spec"]["volumes"]
+        if item["name"] == "cli"
+    )
+    assert cli_volume["image"]["reference"] == (
+        "ghcr.io/stalwartlabs/cli@"
+        "sha256:5b70732cb69cdab3ff0894c501544cf0bfa180fa75bcd0eeba4eebe04c1064e1"
+    )
 
 
 def test_webmail_uses_resilient_dns_for_oauth_and_jmap():
