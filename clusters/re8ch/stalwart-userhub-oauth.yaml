@@ -98,7 +98,7 @@
     "namespace": "mail-system"
   },
   "data": {
-    "plan.ndjson": "{\"@type\":\"upsert\",\"object\":\"Directory\",\"matchOn\":[\"description\"],\"value\":{\"re8ch-enterprise-sso\":{\"@type\":\"Oidc\",\"description\":\"RE8CH Enterprise SSO broker\",\"issuerUrl\":\"https://auth.re8ch.com\",\"requireAudience\":\"stalwart-webui\",\"requireScopes\":{\"openid\":true,\"email\":true,\"profile\":true},\"claimUsername\":\"email\",\"claimName\":\"name\",\"claimGroups\":\"groups\"}}}\n{\"@type\":\"update\",\"object\":\"Authentication\",\"value\":{\"directoryId\":\"#re8ch-enterprise-sso\"}}\n"
+    "plan.ndjson": "{\"@type\":\"upsert\",\"object\":\"Directory\",\"matchOn\":[\"description\"],\"value\":{\"re8ch-enterprise-sso\":{\"@type\":\"Oidc\",\"description\":\"RE8CH Enterprise SSO broker\",\"issuerUrl\":\"https://auth.re8ch.com\",\"acceptedAudiences\":{\"stalwart-webui\":true},\"claimUsername\":\"email\",\"claimName\":\"name\",\"claimGroups\":\"groups\"}}}\n{\"@type\":\"update\",\"object\":\"Authentication\",\"value\":{\"directoryId\":\"#re8ch-enterprise-sso\"}}\n"
   }
 }
 ---
@@ -110,7 +110,7 @@
       "app.kubernetes.io/name": "stalwart-unified-identity-bootstrap",
       "governance.re8ch.com/change-plane": "deploying"
     },
-    "name": "stalwart-userhub-oauth-v5",
+    "name": "stalwart-userhub-oauth-v6",
     "namespace": "mail-system"
   },
   "spec": {
