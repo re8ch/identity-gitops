@@ -26,6 +26,7 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
     broker = directory["value"]["re8ch-enterprise-sso"]
     assert broker["issuerUrl"] == "https://auth.re8ch.com"
     assert broker["acceptedAudiences"] == {"stalwart-webui": True}
+    assert broker["unscopedTokens"] == "interoperable"
     assert "requireAudience" not in broker
     assert "requireScopes" not in broker
 
@@ -33,7 +34,7 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
         item
         for item in documents
         if item["kind"] == "Job"
-        and item["metadata"]["name"] == "stalwart-userhub-oauth-v6"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v7"
     )
     plan_volume = next(
         item for item in job["spec"]["template"]["spec"]["volumes"]
