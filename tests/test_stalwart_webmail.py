@@ -22,7 +22,8 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
         and item["metadata"]["namespace"] == "mail-system"
         and item["metadata"]["name"] == "stalwart-userhub-oauth-plan-v1"
     )
-    directory = json.loads(plan["data"]["plan.ndjson"].splitlines()[0])
+    operations = [json.loads(line) for line in plan["data"]["plan.ndjson"].splitlines()]
+    directory = operations[0]
     broker = directory["value"]["re8ch-enterprise-sso"]
     assert broker["issuerUrl"] == "https://auth.re8ch.com"
     assert broker["acceptedAudiences"] == {"stalwart-webui": True}
@@ -30,11 +31,15 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
     assert "requireAudience" not in broker
     assert "requireScopes" not in broker
 
+    domain = operations[1]["value"]["re8ch-domain"]
+    assert domain["name"] == "re8ch.com"
+    assert domain["directoryId"] == "#re8ch-enterprise-sso"
+
     job = next(
         item
         for item in documents
         if item["kind"] == "Job"
-        and item["metadata"]["name"] == "stalwart-userhub-oauth-v7"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v8"
     )
     plan_volume = next(
         item for item in job["spec"]["template"]["spec"]["volumes"]
