@@ -25,13 +25,15 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
     directory = json.loads(plan["data"]["plan.ndjson"].splitlines()[0])
     broker = directory["value"]["re8ch-enterprise-sso"]
     assert broker["issuerUrl"] == "https://auth.re8ch.com"
-    assert broker["requireAudience"] == "stalwart-webui"
+    assert broker["acceptedAudiences"] == {"stalwart-webui": True}
+    assert "requireAudience" not in broker
+    assert "requireScopes" not in broker
 
     job = next(
         item
         for item in documents
         if item["kind"] == "Job"
-        and item["metadata"]["name"] == "stalwart-userhub-oauth-v5"
+        and item["metadata"]["name"] == "stalwart-userhub-oauth-v6"
     )
     plan_volume = next(
         item for item in job["spec"]["template"]["spec"]["volumes"]
