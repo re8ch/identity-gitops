@@ -1,0 +1,17 @@
+{
+  "owner": "re8ch",
+  "repository": "re8ch/identity-gitops",
+  "title": "Identity v1 用户体验研究",
+  "visibility": "PRIVATE",
+  "description": "研究用户任务、前后台能力与稳定体验验收；合成人格发现待真实用户验证。",
+  "fields": [
+    {"name": "Priority", "type": "SINGLE_SELECT", "options": ["P0", "P1", "P2"]},
+    {"name": "Surface", "type": "SINGLE_SELECT", "options": ["Frontend", "Backend", "Cross-cutting"]},
+    {"name": "Evidence", "type": "SINGLE_SELECT", "options": ["Hypothesis", "Source reviewed", "Synthetic", "Browser observed", "User validated"]},
+    {"name": "Use case", "type": "TEXT"},
+    {"name": "Acceptance", "type": "TEXT"}
+  ],
+  "workflow": ["Todo", "In Progress", "Done"],
+  "done_rule": "研究任务有可追溯产出才关闭；功能稳定性必须满足v1验收门槛，不因模拟完成而关闭。",
+  "automation": "none; use native GitHub Projects and bounded CLI operations"
+}
