@@ -5,3 +5,5 @@
 - Pin images and OCI/Helm artifacts by digest.
 - The production root is `clusters/re8ch`.
 - Do not add product-owned User Hub or application auth-gateway Deployments.
+
+- Before using RE8CH self-service or platform tools, read [docs/RE8CH-TOOLS.md](docs/RE8CH-TOOLS.md) and discover the current authenticated catalog.
