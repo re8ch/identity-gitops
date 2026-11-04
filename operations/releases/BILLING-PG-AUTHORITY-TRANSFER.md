@@ -9,10 +9,14 @@ rendered objects from previously accepted service-backend releases:
 | identity-access-domain-supabase-pg-re8ch | run 40553229634 / 6f3f7e49bbed2896be7f7b7a98f9e23f8c96d26e | one Deployment, supabase-rest |
 
 The current main Billing projection has 32 objects and route changes. They are
-not part of this transfer. The old accepted source has 28 objects; tests compare
-every object against that exact source. The historical studio database bootstrap
-Job is not imported or replayed. Namespace, credentials, PVCs and old SSA field
-managers are preserved; force and prune are disabled.
+not part of this transfer. The transferred source retains the reviewed 28-object
+inventory; tests compare every object against that bounded source. Immutable
+product image pins may advance through a dedicated Identity PR when the product
+publisher has already applied the same digest and owns that field. This shares
+the matching SSA value without using force or taking publisher ownership. The
+historical studio database bootstrap Job is not imported or replayed. Namespace,
+credentials, PVCs and old SSA field managers are preserved; force and prune are
+disabled.
 
 `authority-transfers.json` binds previous digest, repository and source commit.
 The new repository signs a new authority envelope without rebuilding product
