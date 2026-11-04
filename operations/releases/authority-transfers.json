@@ -6,8 +6,14 @@
     "previousSourceCommit": "4830d8216742524ebeb3be8bbeb6c4cb8c8b9b28",
     "fieldManager": "re8ch-release/main-commerce-billing-payments",
     "sourcePath": "clusters/re8ch/payments-authority-resources.yaml",
-    "sourceDigest": "sha256:1d0ba1890209c5e7e065c5ae0dbb82987c0063a817531d4f2fa18d42e89ea204",
-    "mode": "authority-only-existing-payload"
+    "sourceDigest": "sha256:5002cfa00c7a2eae08d59d7797d6fcd3db164f7631f016cceaa9466faefbdc21",
+    "mode": "authority-only-existing-payload",
+    "pinRefresh": {
+      "field": "apps/Deployment/payments/re8ch-catalog:spec.template.spec.containers[name=catalog].image",
+      "sourceRepository": "re8ch/service-backend",
+      "sourceCommit": "ef0fc713a7ef5059d0e2b3696a103f549496c6ca",
+      "image": "ghcr.io/re8ch-business/catalog@sha256:193f96aaad40bc1a3ff0032f39bde3c31586a8bf301ff92f3e9e6b40a30b64d3"
+    }
   },
   "supabase-pg-re8ch": {
     "previousRepository": "re8ch/service-backend",
