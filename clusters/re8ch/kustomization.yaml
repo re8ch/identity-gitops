@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
 - resources.yaml
 - cube-userhub-oauth.yaml
+- grafana-userhub-oauth.yaml
 - stalwart-userhub-oauth.yaml
 - payments-authority-resources.yaml
 - supabase-pg-re8ch-authority-resources.yaml
