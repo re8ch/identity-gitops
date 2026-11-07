@@ -57,7 +57,7 @@ spec:
     - supabase-oauth-clients-access-subscription-v1
     - supabase-oauth-clients-anycam-v1
     - supabase-oauth-clients-catalog-v1
-    - supabase-oauth-clients-cube-v2
+    - supabase-oauth-clients-cube-v3
     - supabase-oauth-clients-headlamp-v2
     - supabase-oauth-clients-stalwart-v1
     - supabase-platform-admin-api-v5
@@ -80,7 +80,7 @@ spec:
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-access-subscription-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-anycam-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-catalog-v1
-    - core/ConfigMap/supabase-identity/supabase-oauth-clients-cube-v2
+    - core/ConfigMap/supabase-identity/supabase-oauth-clients-cube-v3
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-headlamp-v2
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-stalwart-v1
     - core/ConfigMap/supabase-identity/supabase-platform-admin-api-v5
@@ -103,7 +103,7 @@ spec:
     - gateway.networking.k8s.io/ReferenceGrant/supabase-identity/allow-auth-route-to-supabase-auth
     - networking.k8s.io/Ingress/supabase-identity/supabase-identity-studio-dns
   inventory:
-    digest: sha256:90a181c9ed429c3a0f8c4f63d06db28cc61734c88c3b617f20ffaa43d4817b77
+    digest: sha256:9c7f9b2d12fb52cd8ffa12757716bd08c13ea8c144d83f43bc6a91414ff9f896
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300
