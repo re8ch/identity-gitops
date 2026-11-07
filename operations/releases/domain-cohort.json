@@ -1,6 +1,6 @@
 {
   "domain": "identity-access",
-  "sourceObjects": 327,
+  "sourceObjects": 329,
   "releases": [
     {
       "name": "identity-access-domain-ai-operations",
@@ -71,7 +71,7 @@
     {
       "name": "identity-access-domain-supabase-identity",
       "namespace": "supabase-identity",
-      "objects": 35,
+      "objects": 36,
       "contract": "contracts/identity-access-domain-supabase-identity.yaml"
     },
     {
@@ -87,7 +87,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 220,
+  "publishableObjects": 221,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
@@ -263,6 +263,10 @@
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-oauth-clients-catalog-v1",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-cube-v1",
       "reason": "one-shot-job-platform-owned"
     },
     {
