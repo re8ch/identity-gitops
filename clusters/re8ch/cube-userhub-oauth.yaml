@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: supabase-oauth-clients-cube-v1
+  name: supabase-oauth-clients-cube-v2
   namespace: supabase-identity
 data:
   clients.sql: |
@@ -11,8 +11,8 @@ data:
       token_endpoint_auth_method, redirect_uris, grant_types,
       client_name, client_uri
     ) values (
-      '5e150902-f015-5c2d-b962-049f71900311', '', 'manual', 'public',
-      'none', 'https://cube.service.re8ch.com/oauth2/callback',
+      '5e150902-f015-5c2d-b962-049f71900311', :'client_secret_hash', 'manual', 'confidential',
+      'client_secret_basic', 'https://cube.service.re8ch.com/oauth2/callback',
       'authorization_code,refresh_token', 'CubeSandbox',
       'https://cube.service.re8ch.com'
     ) on conflict (id) do update set
@@ -31,9 +31,9 @@ data:
       if not exists (
         select 1 from auth.oauth_clients
         where id = '5e150902-f015-5c2d-b962-049f71900311'
-          and client_secret_hash = ''
-          and client_type = 'public'
-          and token_endpoint_auth_method = 'none'
+          and client_secret_hash = :'client_secret_hash'
+          and client_type = 'confidential'
+          and token_endpoint_auth_method = 'client_secret_basic'
           and redirect_uris = 'https://cube.service.re8ch.com/oauth2/callback'
           and deleted_at is null
       ) then
@@ -45,7 +45,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: supabase-oauth-clients-cube-v1
+  name: supabase-oauth-clients-cube-v2
   namespace: supabase-identity
 spec:
   backoffLimit: 4
@@ -66,13 +66,21 @@ spec:
           image: postgres:16.9-alpine
           command: [/bin/sh, -ceu]
           args:
-            - psql -X -v ON_ERROR_STOP=1 "$GOTRUE_DB_DATABASE_URL" -f /sql/clients.sql
+            - |
+              client_secret_hash="$(printf '%s' "$OAUTH2_PROXY_CLIENT_SECRET" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+              unset OAUTH2_PROXY_CLIENT_SECRET
+              psql -X -v ON_ERROR_STOP=1 -v client_secret_hash="$client_secret_hash" "$GOTRUE_DB_DATABASE_URL" -f /sql/clients.sql
           env:
             - name: GOTRUE_DB_DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: supabase-identity-secrets
                   key: GOTRUE_DB_DATABASE_URL
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cube-oauth-client-secret
+                  key: OAUTH2_PROXY_CLIENT_SECRET
           volumeMounts:
             - name: sql
               mountPath: /sql
@@ -83,4 +91,4 @@ spec:
       volumes:
         - name: sql
           configMap:
-            name: supabase-oauth-clients-cube-v1
+              name: supabase-oauth-clients-cube-v2
