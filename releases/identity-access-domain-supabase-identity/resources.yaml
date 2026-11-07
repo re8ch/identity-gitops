@@ -952,6 +952,29 @@ apiVersion: v1
 data:
   clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
     \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  'c3ce4282-3121-409d-b2dd-acbc3714d255',\
+    \ '', 'manual', 'public',\n  'none', 'https://grafana.service.re8ch.com/grafana/login/generic_oauth',\n\
+    \  'authorization_code,refresh_token', 'RE8CH Grafana',\n  'https://grafana.service.re8ch.com/grafana/'\n\
+    ) on conflict (id) do update set\n  client_secret_hash = excluded.client_secret_hash,\n\
+    \  registration_type = excluded.registration_type,\n  client_type = excluded.client_type,\n\
+    \  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n  redirect_uris\
+    \ = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n  client_name\
+    \ = excluded.client_name,\n  client_uri = excluded.client_uri,\n  deleted_at =\
+    \ null,\n  updated_at = now();\ndo $$\nbegin\n  if not exists (\n    select 1\
+    \ from auth.oauth_clients\n    where id = 'c3ce4282-3121-409d-b2dd-acbc3714d255'\n\
+    \      and client_secret_hash = ''\n      and client_type = 'public'\n      and\
+    \ token_endpoint_auth_method = 'none'\n      and redirect_uris = 'https://grafana.service.re8ch.com/grafana/login/generic_oauth'\n\
+    \      and deleted_at is null\n  ) then\n    raise exception 'RE8CH Grafana OAuth\
+    \ client was not registered';\n  end if;\nend $$;\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-clients-grafana-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
     \ grant_types,\n  client_name, client_uri\n) values (\n  'ed4e0331-7522-59f8-8a72-2d558844dc24',\
     \ '', 'manual', 'public',\n  'none', 'https://headlamp.service.re8ch.com/oidc-callback',\n\
     \  'authorization_code,refresh_token', 'Headlamp Kubernetes console',\n  'https://headlamp.service.re8ch.com'\n\
