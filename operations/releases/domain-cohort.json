@@ -266,7 +266,7 @@
       "reason": "one-shot-job-platform-owned"
     },
     {
-      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-cube-v1",
+      "identity": "batch/Job/supabase-identity/supabase-oauth-clients-cube-v2",
       "reason": "one-shot-job-platform-owned"
     },
     {
