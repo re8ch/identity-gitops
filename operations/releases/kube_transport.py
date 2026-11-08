@@ -7,6 +7,7 @@ TRANSIENT_MARKERS = (
     "connection refused",
     "i/o timeout",
     "context deadline exceeded",
+    "server was unable to return a response in the time allotted",
     "server is currently unable to handle the request",
     "service unavailable",
     "gateway timeout",

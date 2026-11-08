@@ -258,6 +258,41 @@ def test_normal_apply_does_not_reclaim_conflicting_fields(tmp_path):
     assert "--force-conflicts" not in apply_calls[0][0]
 
 
+def test_apply_retries_bounded_api_server_timeout():
+    calls = []
+    delays = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        if len(calls) < 3:
+            return subprocess.CompletedProcess(
+                argv, 1, "",
+                "Error from server (Timeout): the server was unable to return a response "
+                "in the time allotted, but may still be processing the request",
+            )
+        return subprocess.CompletedProcess(argv, 0, "ok", "")
+
+    item = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "demo", "namespace": "demo"}}
+    executor.Executor(runner=runner, sleeper=delays.append).apply(
+        [item], "re8ch-release/demo", dry_run=True)
+    assert len(calls) == 3
+    assert delays == [1, 2]
+
+
+def test_apply_does_not_retry_authorization_failure():
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1, "", "Error from server (Forbidden): forbidden")
+
+    item = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "demo", "namespace": "demo"}}
+    with pytest.raises(executor.Rejected, match="Forbidden"):
+        executor.Executor(runner=runner, sleeper=lambda _: None).apply(
+            [item], "re8ch-release/demo", dry_run=True)
+    assert len(calls) == 1
+
+
 def test_force_conflicts_requires_action_and_contract_identity(tmp_path):
     value, operation, bundle_path = prepare(tmp_path)
     identity = "apps/Deployment/demo/demo"
