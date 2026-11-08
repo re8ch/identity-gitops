@@ -437,7 +437,6 @@ rules:
   resourceNames:
   - commerce-postgrest-ro
   - commerce-postgrest-rw
-  - hyperswitch-web
   - payment-postgrest
   - payment-postgrest-ro
   - re8ch-catalog
@@ -450,8 +449,6 @@ rules:
   resources:
   - configmaps
   resourceNames:
-  - hyperswitch-superposition-schema
-  - hyperswitch-superposition-seed
   - ssa-state-identity-access-domain-payments
   verbs:
   - get
@@ -475,7 +472,6 @@ rules:
   - commerce-api
   - commerce-postgrest-ro
   - commerce-postgrest-rw
-  - hyperswitch-web
   - nuclio-payment-registry-api
   - payment-postgrest
   - payment-postgrest-ro
@@ -492,9 +488,6 @@ rules:
   - commerce-db-ro
   - commerce-db-rw
   - commerce-public-api
-  - hyperswitch-control-center-public
-  - hyperswitch-router-public
-  - hyperswitch-web-public
   - payment-postgrest-ro
   - payment-postgrest-rw
   - re8ch-catalog-public
@@ -504,6 +497,41 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  resourceNames:
+  - hyperswitch-web
+  verbs:
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  resourceNames:
+  - hyperswitch-superposition-schema
+  - hyperswitch-superposition-seed
+  verbs:
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - services
+  resourceNames:
+  - hyperswitch-web
+  verbs:
+  - delete
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - httproutes
+  resourceNames:
+  - hyperswitch-control-center-public
+  - hyperswitch-router-public
+  - hyperswitch-web-public
+  verbs:
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

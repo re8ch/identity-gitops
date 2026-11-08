@@ -21,6 +21,17 @@ PLURALS = {'ServiceAccount':'serviceaccounts','Service':'services','ConfigMap':'
 CUSTOM_TYPES = json.loads((ROOT/'operations/releases/resource-types.json').read_text())
 TRANSFERRED = json.loads((ROOT/'operations/releases/transferred-authorities.json').read_text())
 FLUX_GROUPS = {'source.toolkit.fluxcd.io','helm.toolkit.fluxcd.io','kustomize.toolkit.fluxcd.io','notification.toolkit.fluxcd.io','image.toolkit.fluxcd.io'}
+RETIREMENTS = {
+    'payments': {
+        'apps/Deployment/payments/hyperswitch-web',
+        'core/ConfigMap/payments/hyperswitch-superposition-schema',
+        'core/ConfigMap/payments/hyperswitch-superposition-seed',
+        'core/Service/payments/hyperswitch-web',
+        'gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-control-center-public',
+        'gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-router-public',
+        'gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-web-public',
+    },
+}
 
 def group(item):
     return item['apiVersion'].split('/')[0] if '/' in item['apiVersion'] else 'core'
@@ -81,13 +92,16 @@ def compile_outputs():
     for namespace,objects in sorted(by_namespace.items()):
         objects.sort(key=object_identity);name=release_name(namespace);package=ROOT/'releases'/name
         inventory=sorted(object_identity(d) for d in objects)
+        retired=sorted(RETIREMENTS.get(namespace,set()))
+        retired_resources={value.rsplit('/',3)[0]+'/'+value.rsplit('/',3)[1] for value in retired}
+        retired_names={value.rsplit('/',1)[1] for value in retired}
         contract={'apiVersion':'delivery.re8ch.com/v1alpha1','kind':'ReleaseContract','metadata':{'name':name},'spec':{
             'authorityDomain':DOMAIN,'target':{'cluster':'re8ch','namespace':namespace},
             'source':{'renderer':'kustomize','revision':'github-main-reviewed','repository':REPOSITORY,'path':'releases/'+name},
             'provenance':{'repository':REPOSITORY,'workflow':WORKFLOW,'ref':'refs/heads/main','environment':ENVIRONMENT,'audience':AUDIENCE,'signer':SIGNER,'issuer':'https://token.actions.githubusercontent.com'},
-            'authorization':{'fieldManager':'re8ch-release/'+name,'resources':sorted({group(d)+'/'+d['kind'] for d in objects}),'objectNames':sorted({d['metadata']['name'] for d in objects}),'allowClusterScoped':False,'requireExisting':True,'forceConflictObjects':[object_identity(d) for d in objects if d['kind'] not in {'Namespace','CustomResourceDefinition','PersistentVolume','PersistentVolumeClaim','StorageClass'}]},
+            'authorization':{'fieldManager':'re8ch-release/'+name,'resources':sorted({group(d)+'/'+d['kind'] for d in objects}|retired_resources),'objectNames':sorted({d['metadata']['name'] for d in objects}|retired_names),'allowClusterScoped':False,'requireExisting':True,'forceConflictObjects':[object_identity(d) for d in objects if d['kind'] not in {'Namespace','CustomResourceDefinition','PersistentVolume','PersistentVolumeClaim','StorageClass'}]},
             'inventory':{'digest':digest(canonical(inventory))},
-            'lifecycle':{'prune':False,'healthTimeoutSeconds':300,'protectedKinds':['Namespace','CustomResourceDefinition','PersistentVolume','PersistentVolumeClaim','StorageClass'],'deletionAllowlist':[]}}}
+            'lifecycle':{'prune':bool(retired),'healthTimeoutSeconds':300,'protectedKinds':['Namespace','CustomResourceDefinition','PersistentVolume','PersistentVolumeClaim','StorageClass'],'deletionAllowlist':retired}}}
         body=yaml.safe_dump_all(objects,sort_keys=False,explicit_start=True)
         if namespace in transfers:
             contract['spec']['authorization']['fieldManager']=transfers[namespace]['fieldManager']
@@ -103,6 +117,13 @@ def compile_outputs():
         for (api,resource),names in sorted(rules.items()):
             verbs=['get','patch','update']
             role_rules.append({'apiGroups':['' if api=='core' else api],'resources':[resource],'resourceNames':sorted(names),'verbs':verbs})
+        retired_rules=defaultdict(set)
+        for value in retired:
+            api,kind,_,object_name=value.rsplit('/',3)
+            retired_rules[(api,PLURALS.get(kind) or CUSTOM_TYPES[api+'/'+kind])].add(object_name)
+        for (api,resource),names in sorted(retired_rules.items()):
+            role_rules.append({'apiGroups':['' if api=='core' else api],'resources':[resource],
+                               'resourceNames':sorted(names),'verbs':['delete']})
         access += [{'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':state,'namespace':namespace,'labels':{'delivery.re8ch.com/state':'accepted','delivery.re8ch.com/authority-domain':DOMAIN}}},
           {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':{'name':name,'namespace':namespace},'rules':role_rules},
           {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'RoleBinding','metadata':{'name':name,'namespace':namespace},'roleRef':{'apiGroup':'rbac.authorization.k8s.io','kind':'Role','name':name},'subjects':[{'apiGroup':'rbac.authorization.k8s.io','kind':'Group','name':GROUP}]}]
