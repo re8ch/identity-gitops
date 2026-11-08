@@ -29,6 +29,7 @@ import yaml
 
 from unified_bundle import canonical, digest, object_identity, validate_schema
 from existing_objects import bind_existing, ExistingObjectError, resource_version_conflict
+from kube_transport import transient_failure
 
 PROTECTED_KINDS = {"Namespace", "CustomResourceDefinition", "PersistentVolume", "PersistentVolumeClaim", "StorageClass",
                    "CephCluster", "CephFilesystem", "CephBlockPool", "CephFilesystemSubVolumeGroup"}
@@ -303,14 +304,21 @@ class Executor:
             if dry_run:
                 argv.append("--dry-run=server")
             argv += ["-f", "-"]
-            for attempt in range(3 if require_existing else 1):
+            for attempt in range(3):
                 current = self.with_existing_versions([item])[0] if require_existing else item
                 try:
                     self.command(argv, json.dumps(current), timeout=120)
                     break
-                except Rejected as error:
-                    if not require_existing or attempt == 2 or not resource_version_conflict(str(error)):
+                except subprocess.TimeoutExpired:
+                    if attempt == 2:
                         raise
+                    self.sleeper(2 ** attempt)
+                except Rejected as error:
+                    retry_version_race = require_existing and resource_version_conflict(str(error))
+                    retry_transport = transient_failure(None, str(error))
+                    if attempt == 2 or not (retry_version_race or retry_transport):
+                        raise
+                    self.sleeper(2 ** attempt)
 
     @staticmethod
     def pointer(value: object, pointer: str) -> object:
