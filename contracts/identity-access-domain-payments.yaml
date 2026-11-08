@@ -54,9 +54,9 @@ spec:
     requireExisting: true
     forceConflictObjects: []
   inventory:
-    digest: sha256:ee65067de8ef6ec5a9b0493ddc2e41048d135ede16c74b9a48f742f17f384c99
+    digest: sha256:fd8e92d86b86b2756d02ff5b3dc453494f5551b9026c4de3260373b8436027bb
   lifecycle:
-    prune: false
+    prune: true
     healthTimeoutSeconds: 300
     protectedKinds:
     - Namespace
@@ -64,4 +64,11 @@ spec:
     - PersistentVolume
     - PersistentVolumeClaim
     - StorageClass
-    deletionAllowlist: []
+    deletionAllowlist:
+    - apps/Deployment/payments/hyperswitch-web
+    - core/ConfigMap/payments/hyperswitch-superposition-schema
+    - core/ConfigMap/payments/hyperswitch-superposition-seed
+    - core/Service/payments/hyperswitch-web
+    - gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-control-center-public
+    - gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-router-public
+    - gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-web-public

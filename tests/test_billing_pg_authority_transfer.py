@@ -5,9 +5,18 @@ import yaml
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+HYPERSWITCH_RETIREMENTS = {
+    ('apps/v1', 'Deployment', 'payments', 'hyperswitch-web'),
+    ('v1', 'ConfigMap', 'payments', 'hyperswitch-superposition-schema'),
+    ('v1', 'ConfigMap', 'payments', 'hyperswitch-superposition-seed'),
+    ('v1', 'Service', 'payments', 'hyperswitch-web'),
+    ('gateway.networking.k8s.io/v1', 'HTTPRoute', 'payments', 'hyperswitch-control-center-public'),
+    ('gateway.networking.k8s.io/v1', 'HTTPRoute', 'payments', 'hyperswitch-router-public'),
+    ('gateway.networking.k8s.io/v1', 'HTTPRoute', 'payments', 'hyperswitch-web-public'),
+}
 
 
-@pytest.mark.parametrize('namespace,count', [('payments', 28), ('supabase-pg-re8ch', 1)])
+@pytest.mark.parametrize('namespace,count', [('payments', 21), ('supabase-pg-re8ch', 1)])
 def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, count):
     transfer = json.loads((ROOT / 'operations/releases/authority-transfers.json').read_text())[namespace]
     original = (ROOT / transfer['sourcePath']).read_bytes()
@@ -17,10 +26,13 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
     identity = lambda obj: (obj['apiVersion'], obj['kind'], obj['metadata']['namespace'], obj['metadata']['name'])
     source_objects = {identity(obj): obj for obj in source}
     target_objects = {identity(obj): obj for obj in target}
-    assert source_objects.keys() == target_objects.keys()
+    expected = set(source_objects) - (HYPERSWITCH_RETIREMENTS if namespace == 'payments' else set())
+    assert target_objects.keys() == expected
     read_routes = {'commerce-db-ro': ('/commerce/v1', 'commerce-api'),
                    'payment-postgrest-ro': ('/payment/v1', 'nuclio-payment-registry-api')}
     for key, original in source_objects.items():
+        if key not in expected:
+            continue
         current = target_objects[key]
         assert current == original
         if namespace == 'payments' and key[1] == 'HTTPRoute' and key[3] in read_routes:
@@ -44,4 +56,13 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
     assert contract['authorization']['fieldManager'] == transfer['fieldManager']
     assert contract['authorization']['forceConflictObjects'] == []
     assert contract['authorization']['requireExisting'] is True
-    assert contract['lifecycle']['prune'] is False
+    if namespace == 'payments':
+        assert contract['lifecycle']['prune'] is True
+        assert set(contract['lifecycle']['deletionAllowlist']) == {
+            ('core' if api == 'v1' else api.split('/')[0]) + f'/{kind}/{ns}/{name}'
+            for api,kind,ns,name in HYPERSWITCH_RETIREMENTS
+        }
+        assert 'hyperswitch-superposition-local-key' in contract['authorization']['objectNames']
+        assert all('PersistentVolumeClaim' not in item for item in contract['lifecycle']['deletionAllowlist'])
+    else:
+        assert contract['lifecycle']['prune'] is False
