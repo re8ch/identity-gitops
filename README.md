@@ -15,6 +15,15 @@ Private workflow badges require repository access.
 
 Private desired-state authority for RE8CH identity platform guardrails. User Hub and application auth runtime releases remain product-owned.
 
+## Local Flux prohibition
+
+Local Flux writers are permanently retired and forbidden. Do not create,
+restore, scale, restart, repair, proxy or authorize Source, Kustomize, Helm,
+Notification, image automation, compatibility or domain Flux controllers.
+Retained Flux APIs and manifests are historical/migration inputs only. GitHub
+webhooks and Actions select reviewed immutable artifacts; the bounded cloud SSA
+executor is the sole runtime writer and the only recovery path.
+
 ## Cloud release artifact reuse
 
 `static-release` defaults to `mode=publish` for a reviewed change. Use
