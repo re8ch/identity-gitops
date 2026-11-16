@@ -1,73 +1,27 @@
 # RE8CH Identity GitOps
 
-<!-- gitops-status:start -->
-[![Reconcile](https://github.com/re8ch/identity-gitops/actions/workflows/identity-access-reconcile.yml/badge.svg?branch=main)](https://github.com/re8ch/identity-gitops/actions/workflows/identity-access-reconcile.yml?query=branch%3Amain)
-[![Contract validation](https://github.com/re8ch/identity-gitops/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/re8ch/identity-gitops/actions/workflows/validate.yml?query=branch%3Amain)
+Desired-state authority for RE8CH identity guardrails and reviewed identity-access releases. Product-owned User Hub and application authentication releases remain in their product repositories.
 
-These live badges show the latest workflow result on `main`, including scheduled
-and manual runs. Reconcile runs can cover a single release; a passing badge is
-not proof that every release is healthy or that SSA changed an object. Open the
-run for its release scope, accepted digest, comparison, apply and health results.
-The [domain observation Project](https://github.com/orgs/re8ch/projects/5) retains release-level evidence;
-receipt dispatch and governance checks do not replace runtime health verification.
-Private workflow badges require repository access.
-<!-- gitops-status:end -->
+## Collaboration
 
-Private desired-state authority for RE8CH identity platform guardrails. User Hub and application auth runtime releases remain product-owned.
+```text
+Project → parent Issue → Issue → branch/worktree → signed commits → PR
+        → checks → runtime evidence → Project status
+```
 
-## Local Flux prohibition
+Use [the Project context template](.github/PROJECT_CONTEXT_TEMPLATE.md). Standard views are `List`, `Status`, and `Timeline`.
 
-Local Flux writers are permanently retired and forbidden. Do not create,
-restore, scale, restart, repair, proxy or authorize Source, Kustomize, Helm,
-Notification, image automation, compatibility or domain Flux controllers.
-Retained Flux APIs and manifests are historical/migration inputs only. GitHub
-webhooks and Actions select reviewed immutable artifacts; the bounded cloud SSA
-executor is the sole runtime writer and the only recovery path.
+## Repository map
 
-## Cloud release artifact reuse
+- `clusters/re8ch/`: production desired state
+- `contracts/`: immutable release contracts
+- `operations/releases/`: compilation, publication, reconciliation, and observation
+- `policies/`: repository authority rules
+- `releases/`: accepted release state
+- `schemas/`: release contracts
+- `tests/`: authority and delivery verification
+- `docs/`: durable contracts and narrative indexes
 
-`static-release` defaults to `mode=publish` for a reviewed change. Use
-`mode=reconcile` with `execute=true` to replay the target's healthy accepted OCI
-digest without recompiling or publishing. Replays verify the original signer,
-inventory and contract; blocked or suspended releases are rejected. Agent owner
-migration requires an initial publication with the new canonical signer before
-accepted-artifact replay can be used. State writes use optimistic concurrency.
+Runtime observations, Kubernetes output, incident timelines, and migration stories belong in Issues, Discussions, the Wiki, or observability systems. Start at [Runtime context](docs/RUNTIME-CONTEXT.md).
 
-Public pull request checks use GitHub-hosted workers. Private preparation can use
-the restricted R640 fallback. Validation supersedes obsolete runs; deployment
-runs remain serialized. No local Docker daemon is required by these workflows.
-
-## Native domain cloud handoff
-
-`python operations/releases/compile_domain.py` reuses the established SSA contract
-and bundle validators to partition the production root by namespace. Generated
-`contracts/*-domain-*.yaml` run through the existing `static-release` workflow.
-`operations/releases/domain-access.yaml` is the exact reviewed access/state seed
-for platform bootstrap; it is not included in this domain's runtime root.
-
-The cohort report lists every source object, either in a publishable release or
-with a specific remaining migration reason. Secret payloads and encrypted
-configuration never enter public OCI bundles. Existing chart snapshot contracts
-remain separate owners. Initial adoption permits only the exact reviewed object
-inventory through `force_takeover=true`, after the previous writer is stopped.
-Pruning is disabled during this first adoption; no migration deletes resources.
-
-CI verifies deterministic outputs and compiles every generated contract. Actual
-cloud adoption still requires the platform access seed and a successful release
-run; generated bundles alone do not establish runtime ownership.
-
-Role and RoleBinding desired objects remain platform-owned until admission can enforce their exact reviewed contents. Runtime groups receive no RBAC writes, bind, escalate or impersonate permission. Exact role names alone are not an escalation boundary.
-
-Adoption contracts set `authorization.requireExisting=true`: the executor verifies the artifact, reads each exact object's resourceVersion and sends it as the SSA precondition. Missing objects and concurrent changes fail closed; adoption never silently recreates a deleted object. Ordinary release contracts without this flag retain creation behavior. One-shot Jobs are platform-owned and excluded from replay, and protected storage objects are excluded from force-conflict requests.
-
-## Independent SSA and Observe actions
-
-Reconcile reports SSA execution and runtime observation separately. The SSA step
-validates authorization and the signed accepted artifact, performs server-side
-dry-run and apply, then records `outcome: applied` and `acceptedDigest`. It does
-not claim a healthy runtime. The following read-only Observe step publishes a
-separate observation artifact and records healthy, degraded or unknown health.
-Runtime health does not fail SSA, lock the release or trigger rollback. Signature,
-authorization, field ownership and API write failures remain execution failures.
-Legacy `healthyDigest` is only a fallback for older accepted records; new replay
-authorization uses the explicitly accepted digest without inventing health proof.
+The bounded cloud SSA executor is the delivery writer. Signed commits, pull requests, and passing checks carry reviewed intent.
