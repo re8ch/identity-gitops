@@ -15,6 +15,11 @@ Private workflow badges require repository access.
 
 Private desired-state authority for RE8CH identity platform guardrails. User Hub and application auth runtime releases remain product-owned.
 
+Cross-organization parents and evidence use `owner/repository#number` or full
+URLs. The reviewed graph and static demo are documented in
+[`docs/CROSS-ORG-CONTEXT.md`](docs/CROSS-ORG-CONTEXT.md) and published through
+[GitHub Pages](https://re8ch.github.io/identity-gitops/).
+
 ## Local Flux prohibition
 
 Local Flux writers are permanently retired and forbidden. Do not create,
