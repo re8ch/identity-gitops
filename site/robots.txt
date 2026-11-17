@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://re8ch.github.io/identity-gitops/sitemap.xml

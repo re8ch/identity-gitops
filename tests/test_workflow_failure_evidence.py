@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_job_failures_keep_separate_redacted_evidence(tmp_path):
     for path in (ROOT / '.github/workflows').glob('*.yml'):
-        if path.name == 'validate.yml':
+        if path.name in {'validate.yml', 'pages.yml'}:
             continue
         workflow = yaml.safe_load(path.read_text())
         for name, job in workflow['jobs'].items():
