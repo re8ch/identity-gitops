@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "repository": "re8ch/identity-gitops",
   "project": "https://github.com/orgs/8iops/projects/3",
-  "parentProgram": "https://github.com/re8ch/service-backend/issues/2883",
+  "parentProgram": "https://github.com/re8ch/service-backend/issues/2890",
   "relatedRepositories": [
     "re8ch/service-backend",
     "8iops/agent-gitops",
