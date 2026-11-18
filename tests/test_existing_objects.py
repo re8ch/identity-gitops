@@ -5,13 +5,16 @@ import pytest
 from test_ssa_release_executor import prepare,executor,NOW,Runner,compile_bundle,canonical,digest,operation_for
 
 class ExistingRunner(Runner):
-    def __init__(self,fault=None):super().__init__();self.fault=fault;self.written=False
+    def __init__(self,fault=None):super().__init__();self.fault=fault;self.written=False;self.reads=0
     def __call__(self,argv,**kwargs):
         if argv[:2]==['cosign','verify'] and self.fault=='signature':
             self.calls.append((argv,kwargs.get('input')))
             return subprocess.CompletedProcess(argv,1,'','invalid signature')
         if argv[:2]==['kubectl','get'] and 'jsonpath={.metadata.uid}{" "}{.metadata.resourceVersion}' in argv:
             self.calls.append((argv,kwargs.get('input')))
+            self.reads += 1
+            if self.fault == 'tls-once' and self.reads == 1:
+                return subprocess.CompletedProcess(argv,1,'','Unable to connect to the server: net/http: TLS handshake timeout')
             return subprocess.CompletedProcess(argv,1 if self.fault=='missing' else 0,'' if self.fault=='missing' else 'original-uid 17','not found' if self.fault=='missing' else '')
         if argv[:2]==['kubectl','apply']:
             self.calls.append((argv,kwargs.get('input')))
@@ -65,6 +68,12 @@ def test_normal_release_without_adoption_flag_keeps_existing_behavior(tmp_path):
     result=executor.Executor(runner=runner,now=lambda:NOW).reconcile(value,op,path,tmp_path/'state',verify_signature=False)
     assert result['outcome']=='healthy'
     assert not any('jsonpath={.metadata.uid}{" "}{.metadata.resourceVersion}' in argv for argv,_ in runner.calls)
+
+def test_existing_object_read_retries_one_transient_tls_failure(tmp_path):
+    value,op,path=fixture(tmp_path);runner=ExistingRunner('tls-once')
+    result=executor.Executor(runner=runner,now=lambda:NOW,sleeper=lambda _:None).reconcile(value,op,path,tmp_path/'state')
+    assert result['outcome']=='healthy' and runner.written
+    assert runner.reads == 4  # failed selection read, retry, dry-run read, apply read
 
 
 class MovingVersionRunner(Runner):
