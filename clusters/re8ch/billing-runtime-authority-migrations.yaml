@@ -210,7 +210,30 @@ data:
     \   and b.active_org_ref = p_active_org_ref\n     and b.tool_ref ~ '^[a-z][a-z0-9+.-]*://[^[:space:]]{1,512}$'\n\
     \     and length(b.provider_audience) between 1 and 512\n     and jsonb_typeof(b.allowed_scopes)\
     \ = 'array'\n     and jsonb_array_length(b.allowed_scopes) between 1 and 16;\n\
-    $$;\n\ncreate table if not exists bifurcate.usage_events (\n  event_ref text primary\
+    $$;\n\ncreate or replace function bifurcate_api.list_ready_tool_installations()\n\
+    returns table(\n  publication_ref text, publication_slug text, publication_display_name\
+    \ text, publication_owner_org_ref text,\n  revision_ref text, revision_number bigint,\
+    \ revision_definition_sha256 text,\n  audience_ref text, audience_kind text,\n\
+    \  installation_ref text, installed_at timestamptz,\n  binding_ref text, provider_kind\
+    \ text, service_instance_ref text,\n  service_binding_ref text, binding_ready_at\
+    \ timestamptz\n)\nlanguage plpgsql stable security definer\nset search_path = pg_catalog,\
+    \ pg_temp\nas $$\ndeclare v_active_org_ref text;\nbegin\n  select org_ref into\
+    \ v_active_org_ref from billing.current_identity_org_context();\n  if v_active_org_ref\
+    \ is null or v_active_org_ref !~ '^[a-z0-9][a-z0-9._-]{1,127}$' then\n   \
+    \ raise exception 'active organization context required' using errcode='42501';\n\
+    \  end if;\n  return query\n  select p.publication_ref, p.slug, p.display_name,\
+    \ p.owner_org_ref,\n         r.revision_ref, r.revision_number, r.definition_sha256,\n\
+    \         a.audience_ref, a.audience_kind,\n         i.installation_ref, i.installed_at,\n\
+    \         b.binding_ref, b.provider_kind, b.service_instance_ref,\n         b.service_binding_ref,\
+    \ b.ready_at\n    from bifurcate.tool_installations i\n    join bifurcate.tool_audiences\
+    \ a on a.audience_ref=i.audience_ref\n      and a.publication_ref=i.publication_ref\
+    \ and a.target_org_ref=i.installed_org_ref\n    join bifurcate.tool_publications p\
+    \ on p.publication_ref=i.publication_ref\n    join bifurcate.tool_revisions r on r.revision_ref=i.revision_ref\
+    \ and r.publication_ref=i.publication_ref\n    join bifurcate.tool_bindings b on b.installation_ref=i.installation_ref\
+    \ and b.owner_org_ref=i.installed_org_ref\n   where i.installed_org_ref=v_active_org_ref\
+    \     and p.lifecycle='published'\n     and r.lifecycle='published'\n     and a.state='active'\n\
+    \     and i.state='installed'\n     and b.state='ready'\n   order by p.slug, i.installation_ref,\
+    \ b.binding_ref;\nend;\n$$;\n\ncreate table if not exists bifurcate.usage_events (\n  event_ref text primary\
     \ key check (event_ref ~ '^ue_[a-f0-9]{32}$'),\n  producer_ref text not null check\
     \ (length(producer_ref) between 1 and 200),\n  idempotency_key text not null check\
     \ (length(idempotency_key) between 1 and 200),\n  owner_org_ref text not null\
@@ -273,7 +296,8 @@ data:
     \ to billing_commerce_runtime;\ngrant select on bifurcate.ready_tool_bindings\
     \ to billing_commerce_runtime;\ngrant usage on schema bifurcate_api to billing_commerce_runtime;\n\
     grant execute on function bifurcate_api.resolve_tool_invocation(text,text) to\
-    \ billing_commerce_runtime;\ngrant execute on function bifurcate.accept_usage_event(text,text,text,text,text,text,text,numeric,text,timestamptz,timestamptz,timestamptz,jsonb,text,text)\n\
+    \ billing_commerce_runtime;\ngrant execute on function bifurcate_api.list_ready_tool_installations()\
+    \ to billing_commerce_runtime;\ngrant execute on function bifurcate.accept_usage_event(text,text,text,text,text,text,text,numeric,text,timestamptz,timestamptz,timestamptz,jsonb,text,text)\n\
     \  to billing_commerce_runtime;\ndo $$\nbegin\n  if exists (select 1 from pg_roles\
     \ where rolname = 'billing_supabase_pgrst_rw') then\n    grant billing_commerce_runtime\
     \ to billing_supabase_pgrst_rw;\n  end if;\n  if exists (select 1 from pg_roles\
