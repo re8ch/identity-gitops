@@ -67,7 +67,7 @@ spec:
     - supabase-tenant-runtime-contexts-v4
     - supabase-tenant-runtime-memberships-v1
     allowClusterScoped: false
-    requireExisting: true
+    requireExisting: false
     forceConflictObjects:
     - apps/Deployment/supabase-identity/identity-avatar-worker
     - apps/Deployment/supabase-identity/supabase-identity-auth
