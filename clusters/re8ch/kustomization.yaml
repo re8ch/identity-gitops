@@ -9,6 +9,7 @@ resources:
 - open-oauth-route.yaml
 - payments-authority-resources.yaml
 - supabase-pg-re8ch-authority-resources.yaml
+- billing-runtime-authority-migrations.yaml
 patches:
 - target: {group: apps, version: v1, kind: Deployment, name: hyperswitch-web, namespace: payments}
   patch: |-

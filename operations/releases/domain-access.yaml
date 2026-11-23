@@ -1312,11 +1312,33 @@ rules:
   - patch
   - update
 - apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  resourceNames:
+  - supabase-billing-schema-migrator
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - ''
   resources:
   - configmaps
   resourceNames:
   - ssa-state-identity-access-domain-supabase-pg-re8ch
+  - supabase-billing-org-cluster-bindings-v1
+  - supabase-billing-tool-publication-authority-v1
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ''
+  resources:
+  - serviceaccounts
+  resourceNames:
+  - supabase-billing-schema-migrator
   verbs:
   - get
   - patch

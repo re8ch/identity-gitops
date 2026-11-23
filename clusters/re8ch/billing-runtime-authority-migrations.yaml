@@ -1,0 +1,474 @@
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  name: supabase-billing-schema-migrator
+  namespace: supabase-pg-re8ch
+---
+apiVersion: v1
+data:
+  migration.sql: "-- Apply to re8ch_billing through the reviewed postgres_admin_sql\
+    \ workflow only.\n-- Identity remains membership authority; this contract consumes\
+    \ short-lived,\n-- audience-limited Identity claims and never accepts an organization\
+    \ parameter.\nbegin transaction isolation level serializable;\nset local role\
+    \ re8ch_billing_migrator;\n\ncreate table if not exists billing.org_cluster_bindings\
+    \ (\n  cluster_ref text primary key check (cluster_ref ~ '^[a-z0-9][a-z0-9._:/-]{2,199}$'),\n\
+    \  org_ref text not null check (org_ref ~ '^[a-z0-9][a-z0-9._-]{1,127}$'),\n \
+    \ binding_role text not null check (binding_role in ('owner','operator','viewer')),\n\
+    \  lifecycle text not null check (lifecycle in ('Ready','revoked')),\n  binding_digest\
+    \ text not null check (binding_digest ~ '^sha256:[0-9a-f]{64}$'),\n  operation_key\
+    \ text not null check (length(operation_key) between 1 and 200),\n  request_hash\
+    \ text not null check (request_hash ~ '^[0-9a-f]{64}$'),\n  created_by_subject\
+    \ uuid not null,\n  created_at timestamptz not null default now(),\n  updated_at\
+    \ timestamptz not null default now(),\n  revoked_at timestamptz,\n  unique (org_ref,\
+    \ operation_key),\n  check ((lifecycle = 'Ready' and revoked_at is null) or\n\
+    \         (lifecycle = 'revoked' and revoked_at is not null))\n);\ncreate index\
+    \ if not exists org_cluster_bindings_org_idx\n  on billing.org_cluster_bindings(org_ref,\
+    \ lifecycle, cluster_ref);\nalter table billing.org_cluster_bindings enable row\
+    \ level security;\nrevoke all on billing.org_cluster_bindings from public, authenticated;\n\
+    \ncreate or replace function billing.current_identity_org_context()\nreturns table(subject_id\
+    \ uuid, org_ref text, membership_role text)\nlanguage plpgsql stable security\
+    \ definer set search_path=pg_catalog,pg_temp as $$\ndeclare v_claims jsonb; v_subject\
+    \ text;\nbegin\n  v_claims := nullif(current_setting('request.jwt.claims', true),\
+    \ '')::jsonb;\n  v_subject := v_claims ->> 'sub';\n  if v_subject is null or v_subject\
+    \ !~\n    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\
+    \ then\n    raise exception 'Identity subject claim is not a canonical UUID' using\
+    \ errcode='28000';\n  end if;\n  if coalesce(v_claims ->> 'org_membership_state','')\
+    \ <> 'active' then\n    raise exception 'active organization membership required'\
+    \ using errcode='42501';\n  end if;\n  if coalesce(v_claims ->> 'org_ref','')\
+    \ !~ '^[a-z0-9][a-z0-9._-]{1,127}$' then\n    raise exception 'active organization\
+    \ claim required' using errcode='28000';\n  end if;\n  if coalesce(v_claims ->>\
+    \ 'org_role','') not in ('owner','admin','member','viewer') then\n    raise exception\
+    \ 'recognized organization role required' using errcode='42501';\n  end if;\n\
+    \  return query select v_subject::uuid, v_claims ->> 'org_ref', v_claims ->> 'org_role';\n\
+    end $$;\nrevoke all on function billing.current_identity_org_context() from public;\n\
+    \ncreate or replace function commerce_api.register_active_org_cluster_binding(\n\
+    \  p_cluster_ref text, p_binding_role text, p_binding_digest text, p_operation_key\
+    \ text\n) returns jsonb\nlanguage plpgsql volatile security definer set search_path=pg_catalog,pg_temp\
+    \ as $$\ndeclare v_subject uuid; v_org text; v_org_role text; v_hash text; v_claims\
+    \ jsonb;\n  v_existing billing.org_cluster_bindings;\nbegin\n  select subject_id,org_ref,membership_role\
+    \ into v_subject,v_org,v_org_role\n    from billing.current_identity_org_context();\n\
+    \  if v_org_role not in ('owner','admin') then\n    raise exception 'organization\
+    \ owner or admin required' using errcode='42501';\n  end if;\n  if p_cluster_ref\
+    \ is null or p_cluster_ref !~ '^[a-z0-9][a-z0-9._:/-]{2,199}$' then raise exception\
+    \ 'invalid cluster reference'; end if;\n  if p_binding_role not in ('owner','operator','viewer')\
+    \ then raise exception 'invalid cluster binding role'; end if;\n  if p_binding_digest\
+    \ is null or p_binding_digest !~ '^sha256:[0-9a-f]{64}$' then raise exception\
+    \ 'invalid binding digest'; end if;\n  if nullif(btrim(p_operation_key),'') is\
+    \ null or length(p_operation_key)>200 then raise exception 'operation key is required';\
+    \ end if;\n  v_claims := nullif(current_setting('request.jwt.claims',true),'')::jsonb;\n\
+    \  if coalesce(v_claims ->> 'cluster_binding_action','') <> 'register'\n     or\
+    \ coalesce(v_claims ->> 'cluster_ref','') <> p_cluster_ref\n     or coalesce(v_claims\
+    \ ->> 'cluster_binding_digest','') <> p_binding_digest then\n    raise exception\
+    \ 'provider-attested cluster binding claims required' using errcode='42501';\n\
+    \  end if;\n  v_hash := encode(public.digest(convert_to(jsonb_build_object(\n\
+    \    'clusterRef',p_cluster_ref,'bindingRole',p_binding_role,'bindingDigest',p_binding_digest\n\
+    \  )::text,'UTF8'),'sha256'),'hex');\n  perform pg_advisory_xact_lock(hashtextextended('org-cluster-binding:'||v_org||':'||p_operation_key,0));\n\
+    \  select * into v_existing from billing.org_cluster_bindings\n    where org_ref=v_org\
+    \ and operation_key=p_operation_key;\n  if found then\n    if v_existing.request_hash<>v_hash\
+    \ then raise exception 'operation key is bound to a different cluster binding\
+    \ request' using errcode='22023'; end if;\n    return jsonb_build_object('clusterRef',v_existing.cluster_ref,'orgRef',v_existing.org_ref,\n\
+    \      'bindingRole',v_existing.binding_role,'lifecycle',v_existing.lifecycle,\n\
+    \      'bindingDigest',v_existing.binding_digest,'idempotentReplay',true);\n \
+    \ end if;\n  if exists(select 1 from billing.org_cluster_bindings where cluster_ref=p_cluster_ref)\
+    \ then\n    raise exception 'cluster reference is already bound' using errcode='23505';\n\
+    \  end if;\n  insert into billing.org_cluster_bindings(cluster_ref,org_ref,binding_role,lifecycle,\n\
+    \    binding_digest,operation_key,request_hash,created_by_subject)\n  values(p_cluster_ref,v_org,p_binding_role,'Ready',p_binding_digest,p_operation_key,v_hash,v_subject);\n\
+    \  return jsonb_build_object('clusterRef',p_cluster_ref,'orgRef',v_org,'bindingRole',p_binding_role,\n\
+    \    'lifecycle','Ready','bindingDigest',p_binding_digest,'idempotentReplay',false);\n\
+    end $$;\n\ncreate or replace function commerce_api.revoke_active_org_cluster_binding(\n\
+    \  p_cluster_ref text, p_expected_binding_digest text\n) returns jsonb\nlanguage\
+    \ plpgsql volatile security definer set search_path=pg_catalog,pg_temp as $$\n\
+    declare v_org text; v_org_role text;\nbegin\n  select org_ref,membership_role\
+    \ into v_org,v_org_role from billing.current_identity_org_context();\n  if v_org_role\
+    \ not in ('owner','admin') then raise exception 'organization owner or admin required'\
+    \ using errcode='42501'; end if;\n  update billing.org_cluster_bindings set lifecycle='revoked',revoked_at=now(),updated_at=now()\n\
+    \    where cluster_ref=p_cluster_ref and org_ref=v_org and lifecycle='Ready'\n\
+    \      and binding_digest=p_expected_binding_digest;\n  if not found then raise\
+    \ exception 'Ready cluster binding with expected digest not found' using errcode='P0002';\
+    \ end if;\n  return jsonb_build_object('clusterRef',p_cluster_ref,'orgRef',v_org,'lifecycle','revoked');\n\
+    end $$;\n\ncreate or replace function commerce_api.verify_active_org_cluster_binding(\n\
+    \  p_cluster_ref text, p_required_role text default 'viewer'\n) returns jsonb\n\
+    language plpgsql stable security definer set search_path=pg_catalog,pg_temp as\
+    \ $$\ndeclare v_org text; v_membership_role text; v_binding billing.org_cluster_bindings;\n\
+    \  v_membership_rank integer; v_binding_rank integer; v_required_rank integer;\n\
+    begin\n  select org_ref,membership_role into v_org,v_membership_role\n    from\
+    \ billing.current_identity_org_context();\n  if p_required_role not in ('owner','operator','viewer')\
+    \ then raise exception 'invalid required cluster role'; end if;\n  select * into\
+    \ v_binding from billing.org_cluster_bindings\n    where cluster_ref=p_cluster_ref\
+    \ and org_ref=v_org and lifecycle='Ready';\n  if not found then raise exception\
+    \ 'active organization has no Ready cluster binding' using errcode='42501'; end\
+    \ if;\n  v_membership_rank := case v_membership_role\n    when 'owner' then 3\
+    \ when 'admin' then 3 when 'member' then 2 else 1 end;\n  v_binding_rank := case\
+    \ v_binding.binding_role\n    when 'owner' then 3 when 'operator' then 2 else\
+    \ 1 end;\n  v_required_rank := case p_required_role\n    when 'owner' then 3 when\
+    \ 'operator' then 2 else 1 end;\n  if least(v_membership_rank,v_binding_rank)\
+    \ < v_required_rank then\n    raise exception 'cluster binding role is insufficient'\
+    \ using errcode='42501';\n  end if;\n  return jsonb_build_object('clusterRef',v_binding.cluster_ref,'orgRef',v_binding.org_ref,\n\
+    \    'bindingRole',v_binding.binding_role,'lifecycle',v_binding.lifecycle,\n \
+    \   'effectiveRole',case least(v_membership_rank,v_binding_rank)\n      when 3\
+    \ then 'owner' when 2 then 'operator' else 'viewer' end,\n    'bindingDigest',v_binding.binding_digest);\n\
+    end $$;\n\nrevoke all on function commerce_api.register_active_org_cluster_binding(text,text,text,text)\
+    \ from public;\nrevoke all on function commerce_api.revoke_active_org_cluster_binding(text,text)\
+    \ from public;\nrevoke all on function commerce_api.verify_active_org_cluster_binding(text,text)\
+    \ from public;\ngrant execute on function commerce_api.register_active_org_cluster_binding(text,text,text,text),\n\
+    \  commerce_api.revoke_active_org_cluster_binding(text,text),\n  commerce_api.verify_active_org_cluster_binding(text,text)\
+    \ to authenticated;\nnotify pgrst,'reload schema';\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-billing-org-cluster-bindings-v1
+  namespace: supabase-pg-re8ch
+---
+apiVersion: v1
+data:
+  migration.sql: "-- Apply to re8ch_billing through the reviewed postgres_admin_sql\
+    \ workflow only.\n-- This is Bifurcate/Catalog business state. It deliberately\
+    \ contains no OAuth\n-- client, user, session, credential, or organization-membership\
+    \ tables.\nbegin transaction isolation level serializable;\n\nset local role re8ch_billing_migrator;\n\
+    create schema if not exists bifurcate authorization re8ch_billing_owner;\n\ncreate\
+    \ table if not exists bifurcate.tool_publications (\n  publication_ref text primary\
+    \ key check (publication_ref ~ '^toolpub_[a-z0-9][a-z0-9_-]{7,95}$'),\n  owner_org_ref\
+    \ text not null check (owner_org_ref <> '*' and owner_org_ref ~ '^[a-z0-9][a-z0-9_-]{0,127}$'),\n\
+    \  slug text not null check (slug ~ '^[a-z][a-z0-9-]{0,62}$'),\n  display_name\
+    \ text not null check (length(display_name) between 1 and 200),\n  lifecycle text\
+    \ not null default 'draft' check (lifecycle in ('draft','published','suspended','retired')),\n\
+    \  created_by_subject uuid not null,\n  created_at timestamptz not null default\
+    \ now(),\n  updated_at timestamptz not null default now(),\n  unique (owner_org_ref,\
+    \ slug),\n  unique (publication_ref, owner_org_ref)\n);\n\ncreate table if not\
+    \ exists bifurcate.tool_revisions (\n  revision_ref text primary key check (revision_ref\
+    \ ~ '^toolrev_[a-f0-9]{32}$'),\n  publication_ref text not null references bifurcate.tool_publications(publication_ref),\n\
+    \  revision_number bigint not null check (revision_number > 0),\n  definition\
+    \ jsonb not null check (jsonb_typeof(definition) = 'object'),\n  definition_sha256\
+    \ text not null check (definition_sha256 ~ '^[a-f0-9]{64}$'),\n  lifecycle text\
+    \ not null default 'draft' check (lifecycle in ('draft','published','withdrawn')),\n\
+    \  created_by_subject uuid not null,\n  created_at timestamptz not null default\
+    \ now(),\n  unique (publication_ref, revision_number),\n  unique (publication_ref,\
+    \ revision_ref),\n  unique (revision_ref, definition_sha256)\n);\n\ncreate table\
+    \ if not exists bifurcate.tool_audiences (\n  audience_ref text primary key check\
+    \ (audience_ref ~ '^toolaud_[a-f0-9]{32}$'),\n  publication_ref text not null\
+    \ references bifurcate.tool_publications(publication_ref),\n  target_org_ref text\
+    \ not null check (target_org_ref <> '*' and target_org_ref ~ '^[a-z0-9][a-z0-9_-]{0,127}$'),\n\
+    \  audience_kind text not null check (audience_kind in ('organization','admin')),\n\
+    \  state text not null default 'pending_approval' check (state in ('pending_approval','active','revoked')),\n\
+    \  requested_by_subject uuid not null,\n  approved_by_subject uuid,\n  approved_at\
+    \ timestamptz,\n  created_at timestamptz not null default now(),\n  revoked_at\
+    \ timestamptz,\n  unique (publication_ref, target_org_ref),\n  unique (audience_ref,\
+    \ publication_ref, target_org_ref),\n  check ((state <> 'active') or (approved_by_subject\
+    \ is not null and approved_at is not null)),\n  check ((audience_kind <> 'admin')\
+    \ or state <> 'active' or approved_by_subject <> requested_by_subject),\n  check\
+    \ ((state <> 'revoked') or revoked_at is not null)\n);\n\ncreate or replace function\
+    \ bifurcate.force_admin_audience_pending() returns trigger\nlanguage plpgsql set\
+    \ search_path = pg_catalog, pg_temp as $$\nbegin\n  if new.audience_kind = 'admin'\
+    \ then\n    new.state := 'pending_approval';\n    new.approved_by_subject := null;\n\
+    \    new.approved_at := null;\n  end if;\n  return new;\nend;\n$$;\ndrop trigger\
+    \ if exists admin_audience_starts_pending on bifurcate.tool_audiences;\ncreate\
+    \ trigger admin_audience_starts_pending before insert on bifurcate.tool_audiences\n\
+    for each row execute function bifurcate.force_admin_audience_pending();\n\ncreate\
+    \ table if not exists bifurcate.tool_installations (\n  installation_ref text\
+    \ primary key check (installation_ref ~ '^toolins_[a-f0-9]{32}$'),\n  audience_ref\
+    \ text not null,\n  publication_ref text not null,\n  installed_org_ref text not\
+    \ null check (installed_org_ref <> '*'),\n  revision_ref text not null,\n  state\
+    \ text not null default 'pending' check (state in ('pending','installed','suspended','removed')),\n\
+    \  installed_by_subject uuid not null,\n  installed_at timestamptz,\n  removed_at\
+    \ timestamptz,\n  created_at timestamptz not null default now(),\n  foreign key\
+    \ (audience_ref, publication_ref, installed_org_ref)\n    references bifurcate.tool_audiences(audience_ref,\
+    \ publication_ref, target_org_ref),\n  foreign key (publication_ref, revision_ref)\n\
+    \    references bifurcate.tool_revisions(publication_ref, revision_ref),\n  unique\
+    \ (publication_ref, installed_org_ref),\n  unique (installation_ref, installed_org_ref),\n\
+    \  check ((state <> 'installed') or installed_at is not null),\n  check ((state\
+    \ <> 'removed') or removed_at is not null)\n);\n\ncreate table if not exists bifurcate.tool_bindings\
+    \ (\n  binding_ref text primary key check (binding_ref ~ '^toolbind_[a-f0-9]{32}$'),\n\
+    \  installation_ref text not null,\n  owner_org_ref text not null check (owner_org_ref\
+    \ <> '*'),\n  service_instance_ref text not null,\n  service_binding_ref text\
+    \ not null,\n  provider_kind text not null,\n  state text not null default 'pending'\
+    \ check (state in ('pending','ready','failed','revoked')),\n  ready_at timestamptz,\n\
+    \  revoked_at timestamptz,\n  created_at timestamptz not null default now(),\n\
+    \  updated_at timestamptz not null default now(),\n  foreign key (installation_ref,\
+    \ owner_org_ref)\n    references bifurcate.tool_installations(installation_ref,\
+    \ installed_org_ref),\n  unique (installation_ref, service_binding_ref),\n  check\
+    \ ((state <> 'ready') or ready_at is not null),\n  check ((state <> 'revoked')\
+    \ or revoked_at is not null)\n);\n\ncreate or replace view bifurcate.ready_tool_bindings\
+    \ as\nselect b.binding_ref, b.installation_ref, b.owner_org_ref as active_org_ref,\n\
+    \       p.owner_org_ref, b.service_instance_ref,\n       b.service_binding_ref,\
+    \ b.provider_kind, i.publication_ref, i.revision_ref,\n       r.definition ->>\
+    \ 'toolRef' as tool_ref,\n       r.definition ->> 'providerAudience' as provider_audience,\n\
+    \       r.definition -> 'allowedScopes' as allowed_scopes\nfrom bifurcate.tool_bindings\
+    \ b\njoin bifurcate.tool_installations i using (installation_ref)\njoin bifurcate.tool_audiences\
+    \ a using (audience_ref, publication_ref)\njoin bifurcate.tool_revisions r using\
+    \ (revision_ref, publication_ref)\njoin bifurcate.tool_publications p using (publication_ref)\n\
+    where b.state = 'ready' and i.state = 'installed' and a.state = 'active'\n  and\
+    \ r.lifecycle = 'published' and p.lifecycle = 'published';\n\ncreate schema if\
+    \ not exists bifurcate_api authorization re8ch_billing_owner;\ncreate or replace\
+    \ function bifurcate_api.resolve_tool_invocation(p_binding_ref text, p_active_org_ref\
+    \ text)\nreturns table(binding_ref text, tool_ref text, active_org_ref text, owner_org_ref\
+    \ text,\n              provider_audience text, allowed_scopes jsonb, max_ttl_seconds\
+    \ integer)\nlanguage sql security definer stable\nset search_path = bifurcate,\
+    \ pg_catalog, pg_temp\nas $$\n  select b.binding_ref, b.tool_ref, p_active_org_ref,\
+    \ b.owner_org_ref,\n         b.provider_audience, b.allowed_scopes, 300\n    from\
+    \ bifurcate.ready_tool_bindings b\n   where b.binding_ref = p_binding_ref\n  \
+    \   and b.active_org_ref = p_active_org_ref\n     and b.tool_ref ~ '^[a-z][a-z0-9+.-]*://[^[:space:]]{1,512}$'\n\
+    \     and length(b.provider_audience) between 1 and 512\n     and jsonb_typeof(b.allowed_scopes)\
+    \ = 'array'\n     and jsonb_array_length(b.allowed_scopes) between 1 and 16;\n\
+    $$;\n\ncreate table if not exists bifurcate.usage_events (\n  event_ref text primary\
+    \ key check (event_ref ~ '^ue_[a-f0-9]{32}$'),\n  producer_ref text not null check\
+    \ (length(producer_ref) between 1 and 200),\n  idempotency_key text not null check\
+    \ (length(idempotency_key) between 1 and 200),\n  owner_org_ref text not null\
+    \ check (owner_org_ref <> '*'),\n  resource_ref text not null,\n  service_class\
+    \ text not null,\n  meter_code text not null,\n  quantity numeric not null check\
+    \ (quantity >= 0),\n  unit text not null,\n  period_start timestamptz not null,\n\
+    \  period_end timestamptz not null,\n  observed_at timestamptz not null,\n  dimensions\
+    \ jsonb not null default '{}'::jsonb check (jsonb_typeof(dimensions) = 'object'),\n\
+    \  schema_version text not null check (schema_version = 'usage.re8ch.com/v1'),\n\
+    \  content_sha256 text not null check (content_sha256 ~ '^[a-f0-9]{64}$'),\n \
+    \ pricing_applied boolean not null default false check (pricing_applied = false),\n\
+    \  accounting_posted boolean not null default false check (accounting_posted =\
+    \ false),\n  received_at timestamptz not null default now(),\n  unique (producer_ref,\
+    \ idempotency_key),\n  check (period_start < period_end)\n);\n\ncreate or replace\
+    \ function bifurcate.accept_usage_event(\n  p_event_ref text, p_producer_ref text,\
+    \ p_idempotency_key text,\n  p_owner_org_ref text, p_resource_ref text, p_service_class\
+    \ text,\n  p_meter_code text, p_quantity numeric, p_unit text,\n  p_period_start\
+    \ timestamptz, p_period_end timestamptz, p_observed_at timestamptz,\n  p_dimensions\
+    \ jsonb, p_schema_version text, p_content_sha256 text\n) returns table(event_ref\
+    \ text, idempotent_replay boolean)\nlanguage plpgsql security definer\nset search_path\
+    \ = bifurcate, pg_catalog, pg_temp\nas $$\ndeclare v_existing bifurcate.usage_events%rowtype;\n\
+    begin\n  insert into bifurcate.usage_events(event_ref, producer_ref, idempotency_key,\n\
+    \    owner_org_ref, resource_ref, service_class, meter_code, quantity, unit,\n\
+    \    period_start, period_end, observed_at, dimensions, schema_version, content_sha256)\n\
+    \  values(p_event_ref, p_producer_ref, p_idempotency_key, p_owner_org_ref,\n \
+    \   p_resource_ref, p_service_class, p_meter_code, p_quantity, p_unit,\n    p_period_start,\
+    \ p_period_end, p_observed_at, coalesce(p_dimensions, '{}'::jsonb),\n    p_schema_version,\
+    \ p_content_sha256)\n  on conflict (producer_ref, idempotency_key) do nothing\n\
+    \  returning * into v_existing;\n  if found then\n    return query select p_event_ref,\
+    \ false;\n    return;\n  end if;\n  select * into strict v_existing from bifurcate.usage_events\n\
+    \    where producer_ref = p_producer_ref and idempotency_key = p_idempotency_key;\n\
+    \  -- The caller-provided digest is audit metadata, not replay authority. Compare\n\
+    \  -- every canonical business field so a producer cannot reuse a key and digest\n\
+    \  -- while changing the event payload.\n  if v_existing.event_ref is distinct\
+    \ from p_event_ref\n     or v_existing.owner_org_ref is distinct from p_owner_org_ref\n\
+    \     or v_existing.resource_ref is distinct from p_resource_ref\n     or v_existing.service_class\
+    \ is distinct from p_service_class\n     or v_existing.meter_code is distinct\
+    \ from p_meter_code\n     or v_existing.quantity is distinct from p_quantity\n\
+    \     or v_existing.unit is distinct from p_unit\n     or v_existing.period_start\
+    \ is distinct from p_period_start\n     or v_existing.period_end is distinct from\
+    \ p_period_end\n     or v_existing.observed_at is distinct from p_observed_at\n\
+    \     or v_existing.dimensions is distinct from coalesce(p_dimensions, '{}'::jsonb)\n\
+    \     or v_existing.schema_version is distinct from p_schema_version\n     or\
+    \ v_existing.content_sha256 is distinct from p_content_sha256 then\n    raise\
+    \ exception 'idempotency key already exists with different content'\n      using\
+    \ errcode = '23505';\n  end if;\n  return query select v_existing.event_ref, true;\n\
+    end;\n$$;\n\ncreate or replace function bifurcate.reject_revision_mutation() returns\
+    \ trigger\nlanguage plpgsql set search_path = pg_catalog, pg_temp as $$\nbegin\n\
+    \  if old.definition is distinct from new.definition\n     or old.definition_sha256\
+    \ is distinct from new.definition_sha256\n     or old.publication_ref is distinct\
+    \ from new.publication_ref\n     or old.revision_number is distinct from new.revision_number\
+    \ then\n    raise exception 'tool revision payloads are immutable' using errcode\
+    \ = '55000';\n  end if;\n  return new;\nend;\n$$;\ndrop trigger if exists tool_revision_payload_immutable\
+    \ on bifurcate.tool_revisions;\ncreate trigger tool_revision_payload_immutable\
+    \ before update on bifurcate.tool_revisions\nfor each row execute function bifurcate.reject_revision_mutation();\n\
+    \nrevoke all on schema bifurcate from public;\nrevoke all on all tables in schema\
+    \ bifurcate from public;\nrevoke all on all functions in schema bifurcate from\
+    \ public;\nrevoke all on schema bifurcate_api from public;\nrevoke all on all\
+    \ functions in schema bifurcate_api from public;\ngrant usage on schema bifurcate\
+    \ to billing_commerce_runtime;\ngrant select on bifurcate.ready_tool_bindings\
+    \ to billing_commerce_runtime;\ngrant usage on schema bifurcate_api to billing_commerce_runtime;\n\
+    grant execute on function bifurcate_api.resolve_tool_invocation(text,text) to\
+    \ billing_commerce_runtime;\ngrant execute on function bifurcate.accept_usage_event(text,text,text,text,text,text,text,numeric,text,timestamptz,timestamptz,timestamptz,jsonb,text,text)\n\
+    \  to billing_commerce_runtime;\ndo $$\nbegin\n  if exists (select 1 from pg_roles\
+    \ where rolname = 'billing_supabase_pgrst_rw') then\n    grant billing_commerce_runtime\
+    \ to billing_supabase_pgrst_rw;\n  end if;\n  if exists (select 1 from pg_roles\
+    \ where rolname = 'billing_supabase_pgrst_ro') then\n    grant billing_commerce_runtime\
+    \ to billing_supabase_pgrst_ro;\n  end if;\nend\n$$;\nnotify pgrst, 'reload schema';\n\
+    \ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-billing-tool-publication-authority-v1
+  namespace: supabase-pg-re8ch
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/component: schema-migration
+    app.kubernetes.io/part-of: supabase-billing
+  name: supabase-billing-org-cluster-bindings-v1
+  namespace: supabase-pg-re8ch
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 -f /sql/migration.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: PGHOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: re8ch_billing
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER_READ_WRITE
+              name: supabase-pg-re8ch-secrets
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: supabase-pg-re8ch-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      restartPolicy: Never
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: supabase-billing-schema-migrator
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+      volumes:
+      - configMap:
+          name: supabase-billing-org-cluster-bindings-v1
+        name: sql
+  ttlSecondsAfterFinished: 604800
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/component: schema-migration
+    app.kubernetes.io/part-of: supabase-billing
+  name: supabase-billing-tool-publication-authority-v1
+  namespace: supabase-pg-re8ch
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 -f /sql/migration.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: PGHOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: re8ch_billing
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER_READ_WRITE
+              name: supabase-pg-re8ch-secrets
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: supabase-pg-re8ch-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      restartPolicy: Never
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: supabase-billing-schema-migrator
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+      volumes:
+      - configMap:
+          name: supabase-billing-tool-publication-authority-v1
+        name: sql
+  ttlSecondsAfterFinished: 604800
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: supabase-billing-schema-migrator
+  namespace: supabase-pg-re8ch
+spec:
+  egress:
+  - toPorts:
+    - ports:
+      - port: '5432'
+        protocol: TCP
+    toServices:
+    - k8sService:
+        namespace: pigsty-external
+        serviceName: pg-re8ch-primary
+  - toEntities:
+    - host
+    toPorts:
+    - ports:
+      - port: '5432'
+        protocol: TCP
+  - toEndpoints:
+    - matchLabels:
+        io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: '53'
+        protocol: UDP
+      - port: '53'
+        protocol: TCP
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: schema-migration
+      app.kubernetes.io/part-of: supabase-billing

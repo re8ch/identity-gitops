@@ -1,6 +1,6 @@
 {
   "domain": "identity-access",
-  "sourceObjects": 327,
+  "sourceObjects": 333,
   "releases": [
     {
       "name": "identity-access-domain-ai-operations",
@@ -77,7 +77,7 @@
     {
       "name": "identity-access-domain-supabase-pg-re8ch",
       "namespace": "supabase-pg-re8ch",
-      "objects": 1,
+      "objects": 5,
       "contract": "contracts/identity-access-domain-supabase-pg-re8ch.yaml"
     },
     {
@@ -87,7 +87,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 217,
+  "publishableObjects": 221,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",
@@ -295,6 +295,14 @@
     },
     {
       "identity": "batch/Job/supabase-identity/supabase-tenant-runtime-memberships-v1",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/supabase-pg-re8ch/supabase-billing-org-cluster-bindings-v1",
+      "reason": "one-shot-job-platform-owned"
+    },
+    {
+      "identity": "batch/Job/supabase-pg-re8ch/supabase-billing-tool-publication-authority-v1",
       "reason": "one-shot-job-platform-owned"
     },
     {

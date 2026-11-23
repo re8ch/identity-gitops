@@ -14,9 +14,15 @@ HYPERSWITCH_RETIREMENTS = {
     ('gateway.networking.k8s.io/v1', 'HTTPRoute', 'payments', 'hyperswitch-router-public'),
     ('gateway.networking.k8s.io/v1', 'HTTPRoute', 'payments', 'hyperswitch-web-public'),
 }
+BILLING_MIGRATION_SUPPORT = {
+    ('v1', 'ConfigMap', 'supabase-pg-re8ch', 'supabase-billing-org-cluster-bindings-v1'),
+    ('v1', 'ConfigMap', 'supabase-pg-re8ch', 'supabase-billing-tool-publication-authority-v1'),
+    ('v1', 'ServiceAccount', 'supabase-pg-re8ch', 'supabase-billing-schema-migrator'),
+    ('cilium.io/v2', 'CiliumNetworkPolicy', 'supabase-pg-re8ch', 'supabase-billing-schema-migrator'),
+}
 
 
-@pytest.mark.parametrize('namespace,count', [('payments', 21), ('supabase-pg-re8ch', 1)])
+@pytest.mark.parametrize('namespace,count', [('payments', 21), ('supabase-pg-re8ch', 5)])
 def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, count):
     transfer = json.loads((ROOT / 'operations/releases/authority-transfers.json').read_text())[namespace]
     original = (ROOT / transfer['sourcePath']).read_bytes()
@@ -27,6 +33,8 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
     source_objects = {identity(obj): obj for obj in source}
     target_objects = {identity(obj): obj for obj in target}
     expected = set(source_objects) - (HYPERSWITCH_RETIREMENTS if namespace == 'payments' else set())
+    if namespace == 'supabase-pg-re8ch':
+        expected |= BILLING_MIGRATION_SUPPORT
     assert target_objects.keys() == expected
     read_routes = {'commerce-db-ro': ('/commerce/v1', 'commerce-api'),
                    'payment-postgrest-ro': ('/payment/v1', 'nuclio-payment-registry-api')}
@@ -66,3 +74,18 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
         assert all('PersistentVolumeClaim' not in item for item in contract['lifecycle']['deletionAllowlist'])
     else:
         assert contract['lifecycle']['prune'] is False
+
+
+def test_billing_migration_jobs_remain_native_flux_owned():
+    rendered = list(yaml.safe_load_all(
+        (ROOT / 'clusters/re8ch/billing-runtime-authority-migrations.yaml').read_text()
+    ))
+    jobs = {obj['metadata']['name'] for obj in rendered if obj['kind'] == 'Job'}
+    assert jobs == {
+        'supabase-billing-org-cluster-bindings-v1',
+        'supabase-billing-tool-publication-authority-v1',
+    }
+    cohort = json.loads((ROOT / 'operations/releases/domain-cohort.json').read_text())
+    deferred = {item['identity']: item['reason'] for item in cohort['deferred']}
+    for name in jobs:
+        assert deferred[f'batch/Job/supabase-pg-re8ch/{name}'] == 'one-shot-job-platform-owned'
