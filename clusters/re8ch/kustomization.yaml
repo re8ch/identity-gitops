@@ -5,6 +5,8 @@ resources:
 - cube-userhub-oauth.yaml
 - grafana-userhub-oauth.yaml
 - stalwart-userhub-oauth.yaml
+- oauth-application-runtime.yaml
+- open-oauth-route.yaml
 - payments-authority-resources.yaml
 - supabase-pg-re8ch-authority-resources.yaml
 - billing-runtime-authority-migrations.yaml
