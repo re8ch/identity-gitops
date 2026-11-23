@@ -51,3 +51,10 @@ def test_static_release_contains_route_and_configmap_without_duplicate_job():
     assert {item["identity"] for item in cohort["deferred"]} >= {
         "batch/Job/supabase-identity/supabase-oauth-application-runtime-v1"
     }
+
+
+def test_identity_release_can_create_reviewed_runtime_objects():
+    contract = yaml.safe_load((ROOT / "contracts/identity-access-domain-supabase-identity.yaml").read_text())
+    authorization = contract["spec"]["authorization"]
+    assert authorization["requireExisting"] is False
+    assert "supabase-oauth-application-runtime-v1" in authorization["objectNames"]
