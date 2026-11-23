@@ -18,6 +18,17 @@ historical studio database bootstrap Job is not imported or replayed. Namespace,
 credentials, PVCs and old SSA field managers are preserved; force and prune are
 disabled.
 
+The Bifurcate tool-publication and organization-cluster-binding migrations are
+different: they are new, idempotent schema migrations against `re8ch_billing`,
+not a replay of the historical studio bootstrap. This repository is the
+existing authority for `supabase-pg-re8ch`, so its native Flux root creates the
+two one-shot Jobs and their exact supporting objects. The static release
+compiler intentionally classifies Jobs as `one-shot-job-platform-owned`; it
+therefore adopts the ConfigMaps, ServiceAccount, and CiliumNetworkPolicy into
+the protected `identity-access-domain-supabase-pg-re8ch` contract while leaving
+Job execution to the existing native controller. Do not copy these migrations
+into commerce-billing or another static domain to work around that boundary.
+
 `authority-transfers.json` binds previous digest, repository and source commit.
 The new repository signs a new authority envelope without rebuilding product
 images or charts. Old accepted states remain untouched audit evidence; target
