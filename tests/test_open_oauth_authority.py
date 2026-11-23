@@ -58,3 +58,15 @@ def test_identity_release_can_create_reviewed_runtime_objects():
     authorization = contract["spec"]["authorization"]
     assert authorization["requireExisting"] is False
     assert "supabase-oauth-application-runtime-v1" in authorization["objectNames"]
+
+
+def test_identity_executor_can_create_only_named_reviewed_objects():
+    documents = list(yaml.safe_load_all((ROOT / "operations/releases/domain-access.yaml").read_text()))
+    role = next(item for item in documents if item["kind"] == "Role"
+                and item["metadata"]["name"] == "identity-access-domain-supabase-identity")
+    named_configmaps = next(rule for rule in role["rules"] if rule["apiGroups"] == [""]
+                            and rule["resources"] == ["configmaps"] and "resourceNames" in rule)
+    create_configmaps = next(rule for rule in role["rules"] if rule["apiGroups"] == [""]
+                             and rule["resources"] == ["configmaps"] and rule["verbs"] == ["create"])
+    assert "supabase-oauth-application-runtime-v1" in named_configmaps["resourceNames"]
+    assert "resourceNames" not in create_configmaps

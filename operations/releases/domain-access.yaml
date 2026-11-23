@@ -1183,6 +1183,12 @@ rules:
   - patch
   - update
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+- apiGroups:
   - ''
   resources:
   - configmaps
@@ -1212,6 +1218,12 @@ rules:
 - apiGroups:
   - ''
   resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - ''
+  resources:
   - resourcequotas
   resourceNames:
   - supabase-identity-quota
@@ -1219,6 +1231,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - ''
+  resources:
+  - resourcequotas
+  verbs:
+  - create
 - apiGroups:
   - ''
   resources:
@@ -1237,6 +1255,12 @@ rules:
   - patch
   - update
 - apiGroups:
+  - ''
+  resources:
+  - services
+  verbs:
+  - create
+- apiGroups:
   - gateway.networking.k8s.io
   resources:
   - httproutes
@@ -1254,6 +1278,12 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - httproutes
+  verbs:
+  - create
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
   - referencegrants
   resourceNames:
   - allow-auth-route-to-supabase-auth
@@ -1261,6 +1291,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - referencegrants
+  verbs:
+  - create
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -1271,6 +1307,12 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
