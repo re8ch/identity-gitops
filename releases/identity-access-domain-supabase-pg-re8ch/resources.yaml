@@ -321,56 +321,80 @@ data:
     \   and b.active_org_ref = p_active_org_ref\n     and b.tool_ref ~ '^[a-z][a-z0-9+.-]*://[^[:space:]]{1,512}$'\n\
     \     and length(b.provider_audience) between 1 and 512\n     and jsonb_typeof(b.allowed_scopes)\
     \ = 'array'\n     and jsonb_array_length(b.allowed_scopes) between 1 and 16;\n\
-    $$;\n\ncreate table if not exists bifurcate.usage_events (\n  event_ref text primary\
-    \ key check (event_ref ~ '^ue_[a-f0-9]{32}$'),\n  producer_ref text not null check\
-    \ (length(producer_ref) between 1 and 200),\n  idempotency_key text not null check\
-    \ (length(idempotency_key) between 1 and 200),\n  owner_org_ref text not null\
-    \ check (owner_org_ref <> '*'),\n  resource_ref text not null,\n  service_class\
-    \ text not null,\n  meter_code text not null,\n  quantity numeric not null check\
-    \ (quantity >= 0),\n  unit text not null,\n  period_start timestamptz not null,\n\
-    \  period_end timestamptz not null,\n  observed_at timestamptz not null,\n  dimensions\
-    \ jsonb not null default '{}'::jsonb check (jsonb_typeof(dimensions) = 'object'),\n\
-    \  schema_version text not null check (schema_version = 'usage.re8ch.com/v1'),\n\
-    \  content_sha256 text not null check (content_sha256 ~ '^[a-f0-9]{64}$'),\n \
-    \ pricing_applied boolean not null default false check (pricing_applied = false),\n\
-    \  accounting_posted boolean not null default false check (accounting_posted =\
-    \ false),\n  received_at timestamptz not null default now(),\n  unique (producer_ref,\
-    \ idempotency_key),\n  check (period_start < period_end)\n);\n\ncreate or replace\
-    \ function bifurcate.accept_usage_event(\n  p_event_ref text, p_producer_ref text,\
-    \ p_idempotency_key text,\n  p_owner_org_ref text, p_resource_ref text, p_service_class\
-    \ text,\n  p_meter_code text, p_quantity numeric, p_unit text,\n  p_period_start\
-    \ timestamptz, p_period_end timestamptz, p_observed_at timestamptz,\n  p_dimensions\
-    \ jsonb, p_schema_version text, p_content_sha256 text\n) returns table(event_ref\
-    \ text, idempotent_replay boolean)\nlanguage plpgsql security definer\nset search_path\
-    \ = bifurcate, pg_catalog, pg_temp\nas $$\ndeclare v_existing bifurcate.usage_events%rowtype;\n\
-    begin\n  insert into bifurcate.usage_events(event_ref, producer_ref, idempotency_key,\n\
-    \    owner_org_ref, resource_ref, service_class, meter_code, quantity, unit,\n\
-    \    period_start, period_end, observed_at, dimensions, schema_version, content_sha256)\n\
-    \  values(p_event_ref, p_producer_ref, p_idempotency_key, p_owner_org_ref,\n \
-    \   p_resource_ref, p_service_class, p_meter_code, p_quantity, p_unit,\n    p_period_start,\
-    \ p_period_end, p_observed_at, coalesce(p_dimensions, '{}'::jsonb),\n    p_schema_version,\
-    \ p_content_sha256)\n  on conflict (producer_ref, idempotency_key) do nothing\n\
-    \  returning * into v_existing;\n  if found then\n    return query select p_event_ref,\
-    \ false;\n    return;\n  end if;\n  select * into strict v_existing from bifurcate.usage_events\n\
-    \    where producer_ref = p_producer_ref and idempotency_key = p_idempotency_key;\n\
-    \  -- The caller-provided digest is audit metadata, not replay authority. Compare\n\
-    \  -- every canonical business field so a producer cannot reuse a key and digest\n\
-    \  -- while changing the event payload.\n  if v_existing.event_ref is distinct\
-    \ from p_event_ref\n     or v_existing.owner_org_ref is distinct from p_owner_org_ref\n\
-    \     or v_existing.resource_ref is distinct from p_resource_ref\n     or v_existing.service_class\
-    \ is distinct from p_service_class\n     or v_existing.meter_code is distinct\
-    \ from p_meter_code\n     or v_existing.quantity is distinct from p_quantity\n\
-    \     or v_existing.unit is distinct from p_unit\n     or v_existing.period_start\
-    \ is distinct from p_period_start\n     or v_existing.period_end is distinct from\
-    \ p_period_end\n     or v_existing.observed_at is distinct from p_observed_at\n\
-    \     or v_existing.dimensions is distinct from coalesce(p_dimensions, '{}'::jsonb)\n\
-    \     or v_existing.schema_version is distinct from p_schema_version\n     or\
-    \ v_existing.content_sha256 is distinct from p_content_sha256 then\n    raise\
-    \ exception 'idempotency key already exists with different content'\n      using\
-    \ errcode = '23505';\n  end if;\n  return query select v_existing.event_ref, true;\n\
-    end;\n$$;\n\ncreate or replace function bifurcate.reject_revision_mutation() returns\
-    \ trigger\nlanguage plpgsql set search_path = pg_catalog, pg_temp as $$\nbegin\n\
-    \  if old.definition is distinct from new.definition\n     or old.definition_sha256\
+    $$;\n\ncreate or replace function bifurcate_api.list_ready_tool_installations()\n\
+    returns table(\n  publication_ref text, publication_slug text, publication_display_name\
+    \ text, publication_owner_org_ref text,\n  revision_ref text, revision_number\
+    \ bigint, revision_definition_sha256 text,\n  audience_ref text, audience_kind\
+    \ text,\n  installation_ref text, installed_at timestamptz,\n  binding_ref text,\
+    \ provider_kind text, service_instance_ref text,\n  service_binding_ref text,\
+    \ binding_ready_at timestamptz\n)\nlanguage plpgsql stable security definer\n\
+    set search_path = pg_catalog, pg_temp\nas $$\ndeclare v_active_org_ref text;\n\
+    begin\n  select org_ref into v_active_org_ref from billing.current_identity_org_context();\n\
+    \  if v_active_org_ref is null or v_active_org_ref !~ '^[a-z0-9][a-z0-9._-]{1,127}$'\
+    \ then\n    raise exception 'active organization context required' using errcode='42501';\n\
+    \  end if;\n  return query\n  select p.publication_ref, p.slug, p.display_name,\
+    \ p.owner_org_ref,\n         r.revision_ref, r.revision_number, r.definition_sha256,\n\
+    \         a.audience_ref, a.audience_kind,\n         i.installation_ref, i.installed_at,\n\
+    \         b.binding_ref, b.provider_kind, b.service_instance_ref,\n         b.service_binding_ref,\
+    \ b.ready_at\n    from bifurcate.tool_installations i\n    join bifurcate.tool_audiences\
+    \ a on a.audience_ref=i.audience_ref\n      and a.publication_ref=i.publication_ref\
+    \ and a.target_org_ref=i.installed_org_ref\n    join bifurcate.tool_publications\
+    \ p on p.publication_ref=i.publication_ref\n    join bifurcate.tool_revisions\
+    \ r on r.revision_ref=i.revision_ref and r.publication_ref=i.publication_ref\n\
+    \    join bifurcate.tool_bindings b on b.installation_ref=i.installation_ref and\
+    \ b.owner_org_ref=i.installed_org_ref\n   where i.installed_org_ref=v_active_org_ref\
+    \     and p.lifecycle='published'\n     and r.lifecycle='published'\n     and\
+    \ a.state='active'\n     and i.state='installed'\n     and b.state='ready'\n \
+    \  order by p.slug, i.installation_ref, b.binding_ref;\nend;\n$$;\n\ncreate table\
+    \ if not exists bifurcate.usage_events (\n  event_ref text primary key check (event_ref\
+    \ ~ '^ue_[a-f0-9]{32}$'),\n  producer_ref text not null check (length(producer_ref)\
+    \ between 1 and 200),\n  idempotency_key text not null check (length(idempotency_key)\
+    \ between 1 and 200),\n  owner_org_ref text not null check (owner_org_ref <> '*'),\n\
+    \  resource_ref text not null,\n  service_class text not null,\n  meter_code text\
+    \ not null,\n  quantity numeric not null check (quantity >= 0),\n  unit text not\
+    \ null,\n  period_start timestamptz not null,\n  period_end timestamptz not null,\n\
+    \  observed_at timestamptz not null,\n  dimensions jsonb not null default '{}'::jsonb\
+    \ check (jsonb_typeof(dimensions) = 'object'),\n  schema_version text not null\
+    \ check (schema_version = 'usage.re8ch.com/v1'),\n  content_sha256 text not null\
+    \ check (content_sha256 ~ '^[a-f0-9]{64}$'),\n  pricing_applied boolean not null\
+    \ default false check (pricing_applied = false),\n  accounting_posted boolean\
+    \ not null default false check (accounting_posted = false),\n  received_at timestamptz\
+    \ not null default now(),\n  unique (producer_ref, idempotency_key),\n  check\
+    \ (period_start < period_end)\n);\n\ncreate or replace function bifurcate.accept_usage_event(\n\
+    \  p_event_ref text, p_producer_ref text, p_idempotency_key text,\n  p_owner_org_ref\
+    \ text, p_resource_ref text, p_service_class text,\n  p_meter_code text, p_quantity\
+    \ numeric, p_unit text,\n  p_period_start timestamptz, p_period_end timestamptz,\
+    \ p_observed_at timestamptz,\n  p_dimensions jsonb, p_schema_version text, p_content_sha256\
+    \ text\n) returns table(event_ref text, idempotent_replay boolean)\nlanguage plpgsql\
+    \ security definer\nset search_path = bifurcate, pg_catalog, pg_temp\nas $$\n\
+    declare v_existing bifurcate.usage_events%rowtype;\nbegin\n  insert into bifurcate.usage_events(event_ref,\
+    \ producer_ref, idempotency_key,\n    owner_org_ref, resource_ref, service_class,\
+    \ meter_code, quantity, unit,\n    period_start, period_end, observed_at, dimensions,\
+    \ schema_version, content_sha256)\n  values(p_event_ref, p_producer_ref, p_idempotency_key,\
+    \ p_owner_org_ref,\n    p_resource_ref, p_service_class, p_meter_code, p_quantity,\
+    \ p_unit,\n    p_period_start, p_period_end, p_observed_at, coalesce(p_dimensions,\
+    \ '{}'::jsonb),\n    p_schema_version, p_content_sha256)\n  on conflict (producer_ref,\
+    \ idempotency_key) do nothing\n  returning * into v_existing;\n  if found then\n\
+    \    return query select p_event_ref, false;\n    return;\n  end if;\n  select\
+    \ * into strict v_existing from bifurcate.usage_events\n    where producer_ref\
+    \ = p_producer_ref and idempotency_key = p_idempotency_key;\n  -- The caller-provided\
+    \ digest is audit metadata, not replay authority. Compare\n  -- every canonical\
+    \ business field so a producer cannot reuse a key and digest\n  -- while changing\
+    \ the event payload.\n  if v_existing.event_ref is distinct from p_event_ref\n\
+    \     or v_existing.owner_org_ref is distinct from p_owner_org_ref\n     or v_existing.resource_ref\
+    \ is distinct from p_resource_ref\n     or v_existing.service_class is distinct\
+    \ from p_service_class\n     or v_existing.meter_code is distinct from p_meter_code\n\
+    \     or v_existing.quantity is distinct from p_quantity\n     or v_existing.unit\
+    \ is distinct from p_unit\n     or v_existing.period_start is distinct from p_period_start\n\
+    \     or v_existing.period_end is distinct from p_period_end\n     or v_existing.observed_at\
+    \ is distinct from p_observed_at\n     or v_existing.dimensions is distinct from\
+    \ coalesce(p_dimensions, '{}'::jsonb)\n     or v_existing.schema_version is distinct\
+    \ from p_schema_version\n     or v_existing.content_sha256 is distinct from p_content_sha256\
+    \ then\n    raise exception 'idempotency key already exists with different content'\n\
+    \      using errcode = '23505';\n  end if;\n  return query select v_existing.event_ref,\
+    \ true;\nend;\n$$;\n\ncreate or replace function bifurcate.reject_revision_mutation()\
+    \ returns trigger\nlanguage plpgsql set search_path = pg_catalog, pg_temp as $$\n\
+    begin\n  if old.definition is distinct from new.definition\n     or old.definition_sha256\
     \ is distinct from new.definition_sha256\n     or old.publication_ref is distinct\
     \ from new.publication_ref\n     or old.revision_number is distinct from new.revision_number\
     \ then\n    raise exception 'tool revision payloads are immutable' using errcode\
@@ -384,7 +408,8 @@ data:
     \ to billing_commerce_runtime;\ngrant select on bifurcate.ready_tool_bindings\
     \ to billing_commerce_runtime;\ngrant usage on schema bifurcate_api to billing_commerce_runtime;\n\
     grant execute on function bifurcate_api.resolve_tool_invocation(text,text) to\
-    \ billing_commerce_runtime;\ngrant execute on function bifurcate.accept_usage_event(text,text,text,text,text,text,text,numeric,text,timestamptz,timestamptz,timestamptz,jsonb,text,text)\n\
+    \ billing_commerce_runtime;\ngrant execute on function bifurcate_api.list_ready_tool_installations()\
+    \ to billing_commerce_runtime;\ngrant execute on function bifurcate.accept_usage_event(text,text,text,text,text,text,text,numeric,text,timestamptz,timestamptz,timestamptz,jsonb,text,text)\n\
     \  to billing_commerce_runtime;\ndo $$\nbegin\n  if exists (select 1 from pg_roles\
     \ where rolname = 'billing_supabase_pgrst_rw') then\n    grant billing_commerce_runtime\
     \ to billing_supabase_pgrst_rw;\n  end if;\n  if exists (select 1 from pg_roles\
