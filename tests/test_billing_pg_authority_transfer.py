@@ -89,3 +89,38 @@ def test_billing_migration_jobs_remain_native_flux_owned():
     deferred = {item['identity']: item['reason'] for item in cohort['deferred']}
     for name in jobs:
         assert deferred[f'batch/Job/supabase-pg-re8ch/{name}'] == 'one-shot-job-platform-owned'
+
+
+def test_billing_release_executor_bootstrap_covers_exact_schema_migrator_policy():
+    access = list(yaml.safe_load_all(
+        (ROOT / 'operations/releases/domain-access.yaml').read_text()
+    ))
+    role = next(
+        obj for obj in access
+        if obj.get('kind') == 'Role'
+        and obj['metadata'].get('namespace') == 'supabase-pg-re8ch'
+        and obj['metadata']['name'] == 'identity-access-domain-supabase-pg-re8ch'
+    )
+    binding = next(
+        obj for obj in access
+        if obj.get('kind') == 'RoleBinding'
+        and obj['metadata'].get('namespace') == 'supabase-pg-re8ch'
+        and obj['metadata']['name'] == 'identity-access-domain-supabase-pg-re8ch'
+    )
+
+    assert {
+        'apiGroups': ['cilium.io'],
+        'resources': ['ciliumnetworkpolicies'],
+        'resourceNames': ['supabase-billing-schema-migrator'],
+        'verbs': ['get', 'patch', 'update'],
+    } in role['rules']
+    assert binding['roleRef'] == {
+        'apiGroup': 'rbac.authorization.k8s.io',
+        'kind': 'Role',
+        'name': role['metadata']['name'],
+    }
+    assert binding['subjects'] == [{
+        'apiGroup': 'rbac.authorization.k8s.io',
+        'kind': 'Group',
+        'name': 're8ch:release-executor:identity-access',
+    }]
