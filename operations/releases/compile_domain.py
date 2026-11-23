@@ -117,6 +117,12 @@ def compile_outputs():
         for (api,resource),names in sorted(rules.items()):
             verbs=['get','patch','update']
             role_rules.append({'apiGroups':['' if api=='core' else api],'resources':[resource],'resourceNames':sorted(names),'verbs':verbs})
+            # Kubernetes cannot authorize create by resourceName because the
+            # object name is not part of the authorization attributes. The
+            # signed contract and executor enforce the exact object allowlist.
+            if namespace == 'supabase-identity':
+                role_rules.append({'apiGroups':['' if api=='core' else api],
+                                   'resources':[resource],'verbs':['create']})
         retired_rules=defaultdict(set)
         for value in retired:
             api,kind,_,object_name=value.rsplit('/',3)
