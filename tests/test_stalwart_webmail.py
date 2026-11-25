@@ -15,6 +15,16 @@ def test_stalwart_userhub_broker_trusts_auth_hub_resource_token():
         )
         if item
     ]
+    oauth_client = next(
+        item
+        for item in documents
+        if item["kind"] == "ConfigMap"
+        and item["metadata"]["name"] == "supabase-oauth-clients-stalwart-v1"
+    )
+    assert (
+        "https://tools.service.re8ch.com/collaboration/oauth/callback"
+        in oauth_client["data"]["clients.sql"]
+    )
     plan = next(
         item
         for item in documents
