@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
 - resources.yaml
 - cube-userhub-oauth.yaml
-- litellm-userhub-oauth.yaml
 - grafana-userhub-oauth.yaml
 - stalwart-userhub-oauth.yaml
 - oauth-application-runtime.yaml

@@ -39,6 +39,12 @@ def test_oauth_migration_authority_is_single_versioned_source():
     assert "grant execute" in migration and "to authenticated" in migration
 
 
+def test_litellm_uses_open_oauth_instead_of_a_static_client_seed():
+    kustomization = (ROOT / "clusters/re8ch/kustomization.yaml").read_text()
+    assert "litellm-userhub-oauth.yaml" not in kustomization
+    assert not (ROOT / "clusters/re8ch/litellm-userhub-oauth.yaml").exists()
+
+
 def test_static_release_contains_route_and_configmap_without_duplicate_job():
     resources = list(yaml.safe_load_all(
         (ROOT / "releases/identity-access-domain-supabase-identity/resources.yaml").read_text()
