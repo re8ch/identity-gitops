@@ -1208,7 +1208,6 @@ rules:
   - supabase-oauth-clients-cube-v3
   - supabase-oauth-clients-grafana-v1
   - supabase-oauth-clients-headlamp-v2
-  - supabase-oauth-clients-litellm-v1
   - supabase-oauth-clients-stalwart-v1
   - supabase-platform-admin-api-v5
   - supabase-tenant-runtime-contexts-v4
