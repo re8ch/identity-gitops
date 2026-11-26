@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 @pytest.mark.parametrize('selected', ['sha256:'+'a'*64, 'https://other.example/release@sha256:'+'a'*64, 'sha256:abc', '$(touch injected)'])
 def test_reuse_shell_uses_fixed_reference_and_never_builds_or_signs(tmp_path,selected):
     jobs=yaml.safe_load((ROOT/'.github/workflows/static-release.yml').read_text())['jobs']
-    job=jobs['compile-sign']; assert "inputs.mode != 'reconcile'" in job['if']
+    job=jobs['compile-sign']; assert "inputs.mode == 'publish'" in job['if']
     step=next(s for s in job['steps'] if s.get('id')=='publish')
     source=next(ROOT.glob('contracts/*domain-*.yaml')); contract=yaml.safe_load(source.read_text());spec=contract['spec']
     (tmp_path/'operations/releases').mkdir(parents=True);shutil.copyfile(ROOT/'operations/releases/verify_reuse_source.py',tmp_path/'operations/releases/verify_reuse_source.py')
