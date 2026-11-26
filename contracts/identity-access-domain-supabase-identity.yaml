@@ -56,6 +56,7 @@ spec:
     - supabase-multi-organization-memberships-v1
     - supabase-oauth-application-runtime-v1
     - supabase-oauth-client-tenant-mcp-v1
+    - supabase-oauth-client-toolhive-v1
     - supabase-oauth-clients-access-subscription-v1
     - supabase-oauth-clients-anycam-v1
     - supabase-oauth-clients-catalog-v1
@@ -81,6 +82,7 @@ spec:
     - core/ConfigMap/supabase-identity/supabase-multi-organization-memberships-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-application-runtime-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-client-tenant-mcp-v1
+    - core/ConfigMap/supabase-identity/supabase-oauth-client-toolhive-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-access-subscription-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-anycam-v1
     - core/ConfigMap/supabase-identity/supabase-oauth-clients-catalog-v1
@@ -109,7 +111,7 @@ spec:
     - gateway.networking.k8s.io/ReferenceGrant/supabase-identity/allow-auth-route-to-supabase-auth
     - networking.k8s.io/Ingress/supabase-identity/supabase-identity-studio-dns
   inventory:
-    digest: sha256:b9dd8bff5a1db8d24106a461b90049ff89d9bbee7f9008e59dbc9682ba0abf86
+    digest: sha256:e650ef2704dca7087de76860d8af74a474574372ed48d962805d573d7e7b9988
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300

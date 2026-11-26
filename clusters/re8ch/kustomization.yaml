@@ -4,6 +4,7 @@ resources:
 - resources.yaml
 - cube-userhub-oauth.yaml
 - grafana-userhub-oauth.yaml
+- toolhive-userhub-oauth.yaml
 - stalwart-userhub-oauth.yaml
 - oauth-application-runtime.yaml
 - open-oauth-route.yaml
