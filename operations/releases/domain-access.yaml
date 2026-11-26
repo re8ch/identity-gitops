@@ -437,6 +437,7 @@ rules:
   resourceNames:
   - commerce-postgrest-ro
   - commerce-postgrest-rw
+  - nuclio-payment-registry-api
   - payment-postgrest
   - payment-postgrest-ro
   - re8ch-catalog
@@ -1207,6 +1208,7 @@ rules:
   - supabase-oauth-clients-cube-v3
   - supabase-oauth-clients-grafana-v1
   - supabase-oauth-clients-headlamp-v2
+  - supabase-oauth-clients-litellm-v1
   - supabase-oauth-clients-stalwart-v1
   - supabase-platform-admin-api-v5
   - supabase-tenant-runtime-contexts-v4
