@@ -54,7 +54,7 @@ spec:
     requireExisting: true
     forceConflictObjects: []
   inventory:
-    digest: sha256:fd8e92d86b86b2756d02ff5b3dc453494f5551b9026c4de3260373b8436027bb
+    digest: sha256:2ca0f01e6053a1a8c70f5897ae92bdaaf82cf08a9af3b0f46d2f01e5aec76ded
   lifecycle:
     prune: true
     healthTimeoutSeconds: 300

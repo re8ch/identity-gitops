@@ -6,7 +6,7 @@
     "previousSourceCommit": "4830d8216742524ebeb3be8bbeb6c4cb8c8b9b28",
     "fieldManager": "re8ch-release/main-commerce-billing-payments",
     "sourcePath": "clusters/re8ch/payments-authority-resources.yaml",
-    "sourceDigest": "sha256:5002cfa00c7a2eae08d59d7797d6fcd3db164f7631f016cceaa9466faefbdc21",
+    "sourceDigest": "sha256:58f5676e56ac86364795e5f2e335cede5de2127d227850c30bdd4334e433ff21",
     "mode": "authority-only-existing-payload",
     "pinRefresh": {
       "field": "apps/Deployment/payments/re8ch-catalog:spec.template.spec.containers[name=catalog].image",

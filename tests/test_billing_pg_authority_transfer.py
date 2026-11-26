@@ -22,7 +22,7 @@ BILLING_MIGRATION_SUPPORT = {
 }
 
 
-@pytest.mark.parametrize('namespace,count', [('payments', 21), ('supabase-pg-re8ch', 5)])
+@pytest.mark.parametrize('namespace,count', [('payments', 22), ('supabase-pg-re8ch', 5)])
 def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, count):
     transfer = json.loads((ROOT / 'operations/releases/authority-transfers.json').read_text())[namespace]
     original = (ROOT / transfer['sourcePath']).read_bytes()
