@@ -5,7 +5,7 @@ on:
       mode:
         description: Publish a new bundle or reconcile the accepted immutable artifact
         type: choice
-        options: [publish, reconcile]
+        options: [publish, reconcile, reset]
         default: publish
       contract:
         description: Reviewed identity-access ReleaseContract path
@@ -66,7 +66,7 @@ jobs:
           retention-days: 30
           if-no-files-found: error
   compile-sign:
-    if: github.ref == 'refs/heads/main' && inputs.mode != 'reconcile'
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'publish'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -235,7 +235,7 @@ jobs:
       group: identity-access-runtime-write
       queue: max
       cancel-in-progress: false
-    if: always() && inputs.execute && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && (needs.compile-sign.result == 'success' || (inputs.mode == 'reconcile' && needs.compile-sign.result == 'skipped'))
+    if: always() && inputs.execute && github.ref == 'refs/heads/main' && needs.validate.result == 'success' && (needs.compile-sign.result == 'success' || (inputs.mode != 'publish' && needs.compile-sign.result == 'skipped'))
     needs: [validate, compile-sign]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -293,7 +293,7 @@ jobs:
           install -d "$RUNNER_TEMP/pulled" "$root/state" "$root/results/$RELEASE_ID"
           state_name="$(python operations/releases/operation_materialize.py state-name --release-id "$RELEASE_ID")"
           kubectl get configmap "$state_name" -n "$TARGET_NAMESPACE" -o json > "$RUNNER_TEMP/state-cm.json"
-          if [[ '${{ inputs.mode }}' == reconcile ]]; then
+          if [[ '${{ inputs.mode }}' != publish ]]; then
             python operations/releases/operation_materialize.py accepted-bundle --configmap "$RUNNER_TEMP/state-cm.json" --contract "$CONTRACT" > "$RUNNER_TEMP/accepted.json"
             OCI_REFERENCE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["reference"])' "$RUNNER_TEMP/accepted.json")"
             OCI_DIGEST="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/accepted.json")"
@@ -305,6 +305,9 @@ jobs:
           python operations/releases/operation_materialize.py hydrate --configmap "$RUNNER_TEMP/state-cm.json" --state-dir "$root" --release-id "$RELEASE_ID"
           request_args=(request --contract "$CONTRACT" --metadata "$RUNNER_TEMP/pulled/bundle-metadata.json" \
             --state-dir "$root" --reference "$OCI_REFERENCE" --digest "$OCI_DIGEST" --output "$RUNNER_TEMP/operation.json")
+          if [[ '${{ inputs.mode }}' == reset ]]; then
+            request_args+=(--action reset)
+          fi
           if [[ '${{ inputs.force_takeover }}' == true ]]; then
             request_args+=(--action force-reconcile)
             while IFS= read -r object; do request_args+=(--force-object "$object"); done < <(
