@@ -293,7 +293,15 @@ jobs:
           install -d "$RUNNER_TEMP/pulled" "$root/state" "$root/results/$RELEASE_ID"
           state_name="$(python operations/releases/operation_materialize.py state-name --release-id "$RELEASE_ID")"
           kubectl get configmap "$state_name" -n "$TARGET_NAMESPACE" -o json > "$RUNNER_TEMP/state-cm.json"
-          if [[ '${{ inputs.mode }}' != publish ]]; then
+          if [[ '${{ inputs.mode }}' == reset ]]; then
+            python - "$RUNNER_TEMP/state-cm.json" <<'PY' > "$RUNNER_TEMP/accepted.json"
+          import json,sys
+          cm=json.load(open(sys.argv[1])); state=json.loads(cm["data"]["accepted-state.json"])
+          print(json.dumps({"reference":state["bundleReference"],"digest":state["acceptedDigest"]}))
+          PY
+            OCI_REFERENCE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["reference"])' "$RUNNER_TEMP/accepted.json")"
+            OCI_DIGEST="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/accepted.json")"
+          elif [[ '${{ inputs.mode }}' == reconcile ]]; then
             python operations/releases/operation_materialize.py accepted-bundle --configmap "$RUNNER_TEMP/state-cm.json" --contract "$CONTRACT" > "$RUNNER_TEMP/accepted.json"
             OCI_REFERENCE="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["reference"])' "$RUNNER_TEMP/accepted.json")"
             OCI_DIGEST="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["digest"])' "$RUNNER_TEMP/accepted.json")"
