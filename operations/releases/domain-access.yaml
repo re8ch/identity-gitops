@@ -437,6 +437,7 @@ rules:
   resourceNames:
   - commerce-postgrest-ro
   - commerce-postgrest-rw
+  - nuclio-payment-registry-api
   - payment-postgrest
   - payment-postgrest-ro
   - re8ch-catalog
