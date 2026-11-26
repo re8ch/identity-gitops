@@ -1067,6 +1067,29 @@ apiVersion: v1
 data:
   clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
     \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
+    \ grant_types,\n  client_name, client_uri\n) values (\n  '32098a11-be0c-5dd4-9f29-ec87c30faf19',\
+    \ '', 'manual', 'public',\n  'none', 'https://tools.re8ch.com/api/auth/oauth2/callback/oidc',\n\
+    \  'authorization_code,refresh_token', 'RE8CH ToolHive Cloud UI',\n  'https://tools.re8ch.com'\n\
+    ) on conflict (id) do update set\n  client_secret_hash = excluded.client_secret_hash,\n\
+    \  registration_type = excluded.registration_type,\n  client_type = excluded.client_type,\n\
+    \  token_endpoint_auth_method = excluded.token_endpoint_auth_method,\n  redirect_uris\
+    \ = excluded.redirect_uris,\n  grant_types = excluded.grant_types,\n  client_name\
+    \ = excluded.client_name,\n  client_uri = excluded.client_uri,\n  deleted_at =\
+    \ null,\n  updated_at = now();\ndo $$\nbegin\n  if not exists (\n    select 1\
+    \ from auth.oauth_clients\n    where id = '32098a11-be0c-5dd4-9f29-ec87c30faf19'\n\
+    \      and client_secret_hash = ''\n      and client_type = 'public'\n      and\
+    \ token_endpoint_auth_method = 'none'\n      and redirect_uris = 'https://tools.re8ch.com/api/auth/oauth2/callback/oidc'\n\
+    \      and deleted_at is null\n  ) then\n    raise exception 'ToolHive OpenOAuth\
+    \ client was not registered';\n  end if;\nend $$;\ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-oauth-client-toolhive-v1
+  namespace: supabase-identity
+---
+apiVersion: v1
+data:
+  clients.sql: "begin;\ninsert into auth.oauth_clients (\n  id, client_secret_hash,\
+    \ registration_type, client_type,\n  token_endpoint_auth_method, redirect_uris,\
     \ grant_types,\n  client_name, client_uri\n) values (\n  'e93247af-5bc0-4f3d-829b-8a70e0a69d31',\
     \ '', 'manual', 'public',\n  'none', 'https://sub.access.re8ch.com/oauth/callback',\n\
     \  'authorization_code,refresh_token', 'RE8CH Access subscription',\n  'https://sub.access.re8ch.com'\n\
