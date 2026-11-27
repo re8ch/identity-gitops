@@ -31,3 +31,4 @@ spec:
     healthTimeoutSeconds: 120
     protectedKinds: [Namespace, CustomResourceDefinition, PersistentVolume, PersistentVolumeClaim, StorageClass]
     deletionAllowlist: []
+

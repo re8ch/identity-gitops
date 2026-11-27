@@ -82,7 +82,7 @@ def test_identity_executor_can_create_only_named_reviewed_objects():
 
 
 def test_open_oauth_has_an_exact_non_pruning_release_contract():
-    contract = yaml.safe_load((ROOT / "contracts/identity-access-openoauth-runtime.yaml").read_text())
+    contract = yaml.safe_load((ROOT / "contracts/operations/identity-access-openoauth-runtime.yaml").read_text())
     assert contract["spec"]["authorization"] == {
         "fieldManager": "re8ch-release/identity-access-openoauth-runtime",
         "resources": ["core/ConfigMap"],
