@@ -1,0 +1,33 @@
+apiVersion: delivery.re8ch.com/v1alpha1
+kind: ReleaseContract
+metadata:
+  name: identity-access-openoauth-runtime
+spec:
+  authorityDomain: identity-access
+  target: {cluster: re8ch, namespace: supabase-identity}
+  source:
+    renderer: kustomize
+    revision: github-main-reviewed
+    repository: re8ch/identity-gitops
+    path: releases/identity-access-openoauth-runtime
+  provenance:
+    repository: re8ch/identity-gitops
+    workflow: .github/workflows/static-release.yml
+    ref: refs/heads/main
+    environment: release-executor-identity-access
+    audience: https://kube-api.re8ch.com/release-executor-identity-access
+    signer: https://github.com/re8ch/identity-gitops/.github/workflows/static-release.yml@refs/heads/main
+    issuer: https://token.actions.githubusercontent.com
+  authorization:
+    fieldManager: re8ch-release/identity-access-openoauth-runtime
+    resources: [core/ConfigMap]
+    objectNames: [supabase-oauth-application-runtime-v1]
+    allowClusterScoped: false
+    requireExisting: true
+  inventory:
+    digest: sha256:192fabf1df4e788a2cd11b8e6ada2f7dcc43709437c71a908f5ff66177124c88
+  lifecycle:
+    prune: false
+    healthTimeoutSeconds: 120
+    protectedKinds: [Namespace, CustomResourceDefinition, PersistentVolume, PersistentVolumeClaim, StorageClass]
+    deletionAllowlist: []
