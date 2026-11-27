@@ -870,12 +870,12 @@ data:
     \ between 1 and 200),\n  requested_by_user_id uuid not null references auth.users(id)\
     \ on delete restrict,\n  rotated_at timestamptz not null default now(),\n  primary\
     \ key (application_id, operation_key)\n);\n\nalter table core.oauth_applications\
-    \ owner to supabase_admin;\nalter table core.oauth_application_redirect_uris owner\
-    \ to supabase_admin;\nalter table core.oauth_application_secret_rotations owner\
-    \ to supabase_admin;\nalter table core.oauth_applications enable row level security;\n\
-    alter table core.oauth_application_redirect_uris enable row level security;\n\
-    alter table core.oauth_application_secret_rotations enable row level security;\n\
-    revoke all on core.oauth_applications, core.oauth_application_redirect_uris,\n\
+    \ owner to supabase_auth_admin;\nalter table core.oauth_application_redirect_uris\
+    \ owner to supabase_auth_admin;\nalter table core.oauth_application_secret_rotations\
+    \ owner to supabase_auth_admin;\nalter table core.oauth_applications enable row\
+    \ level security;\nalter table core.oauth_application_redirect_uris enable row\
+    \ level security;\nalter table core.oauth_application_secret_rotations enable\
+    \ row level security;\nrevoke all on core.oauth_applications, core.oauth_application_redirect_uris,\n\
     \  core.oauth_application_secret_rotations\n  from public, anon, authenticated,\
     \ service_role;\n\ndrop policy if exists oauth_applications_active_org_read on\
     \ core.oauth_applications;\ncreate policy oauth_applications_active_org_read on\
@@ -900,7 +900,7 @@ data:
     \    and not exists (\n      select 1 from jsonb_array_elements_text(p_uris) u(value)\n\
     \      where value !~ '^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[^#[:space:]]*)?$'\n\
     \         or value ~ '[*]'\n    )\n$$;\nalter function core.oauth_redirect_uris_valid(jsonb)\
-    \ owner to supabase_admin;\nrevoke all on function core.oauth_redirect_uris_valid(jsonb)\
+    \ owner to supabase_auth_admin;\nrevoke all on function core.oauth_redirect_uris_valid(jsonb)\
     \ from public, anon, authenticated, service_role;\n\ncreate or replace function\
     \ core.active_oauth_org(p_user uuid)\nreturns table(tenant_ref text, member_role\
     \ text)\nlanguage sql stable security definer set search_path = pg_catalog, pg_temp\
@@ -911,7 +911,10 @@ data:
     \ = 'active' and o.status = 'active'\n    and u.deleted_at is null and m.role\
     \ in ('owner', 'admin', 'member')\n$$;\nalter function core.active_oauth_org(uuid)\
     \ owner to supabase_admin;\nrevoke all on function core.active_oauth_org(uuid)\
-    \ from public, anon, authenticated, service_role;\n\ncreate or replace function\
+    \ from public, anon, authenticated, service_role;\ngrant usage on schema api to\
+    \ supabase_auth_admin;\ngrant execute on function api.current_user_id() to supabase_auth_admin;\n\
+    grant usage on schema core to supabase_auth_admin;\ngrant execute on function\
+    \ core.active_oauth_org(uuid) to supabase_auth_admin;\n\ncreate or replace function\
     \ core.can_manage_oauth_application(\n  p_user uuid, p_application uuid\n) returns\
     \ boolean\nlanguage sql stable security definer set search_path = pg_catalog,\
     \ pg_temp as $$\n  select exists (\n    select 1 from core.oauth_applications\
@@ -923,11 +926,12 @@ data:
     \ u.deleted_at is null\n      and (m.role in ('owner', 'admin')\n        or (m.role\
     \ = 'member' and app.created_by_user_id = p_user))\n  )\n$$;\nalter function core.can_manage_oauth_application(uuid,\
     \ uuid) owner to supabase_admin;\nrevoke all on function core.can_manage_oauth_application(uuid,\
-    \ uuid) from public, anon, authenticated, service_role;\n\ncreate or replace function\
-    \ api.create_oauth_application(\n  p_name text,\n  p_redirect_uris jsonb,\n  p_operation_key\
-    \ text,\n  p_client_uri text default null,\n  p_client_type text default 'public'\n\
-    ) returns jsonb\nlanguage plpgsql volatile security definer set search_path =\
-    \ pg_catalog, pg_temp as $$\ndeclare\n  v_user uuid := api.current_user_id();\n\
+    \ uuid) from public, anon, authenticated, service_role;\ngrant execute on function\
+    \ core.can_manage_oauth_application(uuid, uuid) to supabase_auth_admin;\n\ncreate\
+    \ or replace function api.create_oauth_application(\n  p_name text,\n  p_redirect_uris\
+    \ jsonb,\n  p_operation_key text,\n  p_client_uri text default null,\n  p_client_type\
+    \ text default 'public'\n) returns jsonb\nlanguage plpgsql volatile security definer\
+    \ set search_path = pg_catalog, pg_temp as $$\ndeclare\n  v_user uuid := api.current_user_id();\n\
     \  v_org text;\n  v_role text;\n  v_id uuid;\n  v_secret text;\n  v_hash text;\n\
     \  v_redirects text;\n  v_request_hash text;\n  v_existing core.oauth_applications;\n\
     begin\n  if v_user is null then raise exception 'authenticated user required'\
@@ -1027,10 +1031,10 @@ data:
     \ v_user);\n  return jsonb_build_object('applicationId', p_application_id, 'ownerOrgRef',\
     \ v_owner,\n    'idempotentReplay', false, 'clientSecretIssued', true, 'clientSecret',\
     \ v_secret);\nend $$;\n\nalter function api.create_oauth_application(text,jsonb,text,text,text)\
-    \ owner to supabase_admin;\nalter function api.my_oauth_applications() owner to\
-    \ supabase_admin;\nalter function api.set_oauth_application_lifecycle(uuid,text)\
-    \ owner to supabase_admin;\nalter function api.rotate_oauth_application_secret(uuid,text)\
-    \ owner to supabase_admin;\nrevoke all on function api.create_oauth_application(text,jsonb,text,text,text)\
+    \ owner to supabase_auth_admin;\nalter function api.my_oauth_applications() owner\
+    \ to supabase_auth_admin;\nalter function api.set_oauth_application_lifecycle(uuid,text)\
+    \ owner to supabase_auth_admin;\nalter function api.rotate_oauth_application_secret(uuid,text)\
+    \ owner to supabase_auth_admin;\nrevoke all on function api.create_oauth_application(text,jsonb,text,text,text)\
     \ from public, anon, service_role;\nrevoke all on function api.my_oauth_applications()\
     \ from public, anon, service_role;\nrevoke all on function api.set_oauth_application_lifecycle(uuid,text)\
     \ from public, anon, service_role;\nrevoke all on function api.rotate_oauth_application_secret(uuid,text)\

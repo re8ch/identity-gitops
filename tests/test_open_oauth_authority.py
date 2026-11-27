@@ -37,6 +37,9 @@ def test_oauth_migration_authority_is_single_versioned_source():
                      "set_oauth_application_lifecycle", "rotate_oauth_application_secret"):
         assert f"api.{function}" in migration
     assert "grant execute" in migration and "to authenticated" in migration
+    assert "alter function core.active_oauth_org(uuid) owner to supabase_admin" in migration
+    assert "grant execute on function core.active_oauth_org(uuid) to supabase_auth_admin" in migration
+    assert "alter function api.create_oauth_application(text,jsonb,text,text,text) owner to supabase_auth_admin" in migration
 
 
 def test_litellm_uses_open_oauth_instead_of_a_static_client_seed():
