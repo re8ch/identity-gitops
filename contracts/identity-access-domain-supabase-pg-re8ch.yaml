@@ -24,10 +24,12 @@ spec:
     fieldManager: re8ch-release/main-data-storage-supabase-pg-re8ch
     resources:
     - apps/Deployment
+    - batch/Job
     - cilium.io/CiliumNetworkPolicy
     - core/ConfigMap
     - core/ServiceAccount
     objectNames:
+    - supabase-billing-dynamic-mcp-catalog-v2
     - supabase-billing-org-cluster-bindings-v1
     - supabase-billing-schema-migrator
     - supabase-billing-tool-publication-authority-v1
@@ -36,7 +38,7 @@ spec:
     requireExisting: true
     forceConflictObjects: []
   inventory:
-    digest: sha256:49a9fb74a60022bbc090a4739c8275309e848048f1a4928549c69d34c39758c8
+    digest: sha256:faec7542cd4a1f305a6d6f73254646f77d9bc25841a4224b6433385f59f80c47
   lifecycle:
     prune: false
     healthTimeoutSeconds: 300

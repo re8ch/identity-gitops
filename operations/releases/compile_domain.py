@@ -32,6 +32,9 @@ RETIREMENTS = {
         'gateway.networking.k8s.io/HTTPRoute/payments/hyperswitch-web-public',
     },
 }
+PUBLISHABLE_ONE_SHOT_JOBS = {
+    'batch/Job/supabase-pg-re8ch/supabase-billing-dynamic-mcp-catalog-v2',
+}
 
 def group(item):
     return item['apiVersion'].split('/')[0] if '/' in item['apiVersion'] else 'core'
@@ -55,7 +58,8 @@ def classify(item,reserved):
     if item['metadata'].get('namespace') in TRANSFERRED:return 'transferred-to-agent-runtime'
     if ident in reserved:return 'existing-release-contract'
     if group(item)=='rbac.authorization.k8s.io':return 'platform-owned-rbac'
-    if item['kind']=='Job':return 'one-shot-job-platform-owned'
+    if item['kind']=='Job' and ident not in PUBLISHABLE_ONE_SHOT_JOBS:
+        return 'one-shot-job-platform-owned'
     if item['kind']=='Secret':return 'secret-provisioning'
     if contains_encrypted(item):return 'restricted-cloud-decryption'
     if group(item) in FLUX_GROUPS:return 'helm-render' if item['kind']=='HelmRelease' else 'retired-flux-control-resource'

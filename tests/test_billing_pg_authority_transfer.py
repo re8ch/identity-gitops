@@ -19,10 +19,12 @@ BILLING_MIGRATION_SUPPORT = {
     ('v1', 'ConfigMap', 'supabase-pg-re8ch', 'supabase-billing-tool-publication-authority-v1'),
     ('v1', 'ServiceAccount', 'supabase-pg-re8ch', 'supabase-billing-schema-migrator'),
     ('cilium.io/v2', 'CiliumNetworkPolicy', 'supabase-pg-re8ch', 'supabase-billing-schema-migrator'),
+    ('v1', 'ConfigMap', 'supabase-pg-re8ch', 'supabase-billing-dynamic-mcp-catalog-v2'),
+    ('batch/v1', 'Job', 'supabase-pg-re8ch', 'supabase-billing-dynamic-mcp-catalog-v2'),
 }
 
 
-@pytest.mark.parametrize('namespace,count', [('payments', 22), ('supabase-pg-re8ch', 5)])
+@pytest.mark.parametrize('namespace,count', [('payments', 22), ('supabase-pg-re8ch', 7)])
 def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, count):
     transfer = json.loads((ROOT / 'operations/releases/authority-transfers.json').read_text())[namespace]
     original = (ROOT / transfer['sourcePath']).read_bytes()
@@ -59,7 +61,13 @@ def test_transfer_uses_accepted_payload_without_new_routes_or_jobs(namespace, co
             }
             assert all(match['path']['type'] == 'Exact' for match in matches)
     assert len(target) == count
-    assert not {'Secret', 'Role', 'RoleBinding', 'Job'} & {obj['kind'] for obj in target}
+    assert not {'Secret', 'Role', 'RoleBinding'} & {obj['kind'] for obj in target}
+    if namespace == 'supabase-pg-re8ch':
+        assert {obj['metadata']['name'] for obj in target if obj['kind'] == 'Job'} == {
+            'supabase-billing-dynamic-mcp-catalog-v2'
+        }
+    else:
+        assert not {obj['kind'] for obj in target} & {'Job'}
     contract = yaml.safe_load((ROOT / f'contracts/identity-access-domain-{namespace}.yaml').read_text())['spec']
     assert contract['authorization']['fieldManager'] == transfer['fieldManager']
     assert contract['authorization']['forceConflictObjects'] == []
@@ -84,11 +92,13 @@ def test_billing_migration_jobs_remain_native_flux_owned():
     assert jobs == {
         'supabase-billing-org-cluster-bindings-v1',
         'supabase-billing-tool-publication-authority-v1',
+        'supabase-billing-dynamic-mcp-catalog-v2',
     }
     cohort = json.loads((ROOT / 'operations/releases/domain-cohort.json').read_text())
     deferred = {item['identity']: item['reason'] for item in cohort['deferred']}
-    for name in jobs:
+    for name in jobs - {'supabase-billing-dynamic-mcp-catalog-v2'}:
         assert deferred[f'batch/Job/supabase-pg-re8ch/{name}'] == 'one-shot-job-platform-owned'
+    assert 'batch/Job/supabase-pg-re8ch/supabase-billing-dynamic-mcp-catalog-v2' not in deferred
 
 
 def test_billing_release_executor_bootstrap_covers_exact_schema_migrator_policy():
@@ -112,6 +122,12 @@ def test_billing_release_executor_bootstrap_covers_exact_schema_migrator_policy(
         'apiGroups': ['cilium.io'],
         'resources': ['ciliumnetworkpolicies'],
         'resourceNames': ['supabase-billing-schema-migrator'],
+        'verbs': ['get', 'patch', 'update'],
+    } in role['rules']
+    assert {
+        'apiGroups': ['batch'],
+        'resources': ['jobs'],
+        'resourceNames': ['supabase-billing-dynamic-mcp-catalog-v2'],
         'verbs': ['get', 'patch', 'update'],
     } in role['rules']
     assert binding['roleRef'] == {
