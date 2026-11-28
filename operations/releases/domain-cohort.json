@@ -1,6 +1,6 @@
 {
   "domain": "identity-access",
-  "sourceObjects": 336,
+  "sourceObjects": 338,
   "releases": [
     {
       "name": "identity-access-domain-ai-operations",
@@ -77,7 +77,7 @@
     {
       "name": "identity-access-domain-supabase-pg-re8ch",
       "namespace": "supabase-pg-re8ch",
-      "objects": 5,
+      "objects": 7,
       "contract": "contracts/identity-access-domain-supabase-pg-re8ch.yaml"
     },
     {
@@ -87,7 +87,7 @@
       "contract": "contracts/identity-access-domain-tenant-infrastructure.yaml"
     }
   ],
-  "publishableObjects": 223,
+  "publishableObjects": 225,
   "deferred": [
     {
       "identity": "apps/DaemonSet/egress-fabric/personal-access-udp-host-tuning",

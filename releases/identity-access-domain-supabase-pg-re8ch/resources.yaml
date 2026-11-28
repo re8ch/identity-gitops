@@ -81,6 +81,82 @@ spec:
         operator: Equal
         value: pg-re8ch
 ---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app.kubernetes.io/component: schema-migration
+    app.kubernetes.io/part-of: supabase-billing
+  name: supabase-billing-dynamic-mcp-catalog-v2
+  namespace: supabase-pg-re8ch
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - args:
+        - psql -X -v ON_ERROR_STOP=1 -f /sql/migration.sql
+        command:
+        - /bin/sh
+        - -ceu
+        env:
+        - name: PGHOST
+          value: pg-re8ch-primary.pigsty-external.svc.cluster.local
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: re8ch_billing
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER_READ_WRITE
+              name: supabase-pg-re8ch-secrets
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: supabase-pg-re8ch-secrets
+        image: docker.io/library/postgres@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        name: migrate
+        resources:
+          limits:
+            cpu: 250m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /sql
+          name: sql
+          readOnly: true
+      nodeSelector:
+        kubernetes.io/hostname: r640
+      restartPolicy: Never
+      securityContext:
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: supabase-billing-schema-migrator
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: pg-re8ch
+      volumes:
+      - configMap:
+          name: supabase-billing-dynamic-mcp-catalog-v2
+        name: sql
+  ttlSecondsAfterFinished: 604800
+---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -116,6 +192,262 @@ spec:
     matchLabels:
       app.kubernetes.io/component: schema-migration
       app.kubernetes.io/part-of: supabase-billing
+---
+apiVersion: v1
+data:
+  migration.sql: "-- Apply to re8ch_billing through the reviewed postgres_admin_sql\
+    \ workflow only.\n-- pg-identity remains authoritative for subjects, organizations\
+    \ and membership.\n-- These domains preserve canonical references; they do not\
+    \ mirror identity rows.\nbegin transaction isolation level serializable;\n\nset\
+    \ local role re8ch_billing_migrator;\ncreate schema if not exists bifurcate authorization\
+    \ re8ch_billing_owner;\ncreate schema if not exists bifurcate_api authorization\
+    \ re8ch_billing_owner;\n\ndo $$ begin\n  create domain bifurcate.identity_subject_ref\
+    \ as uuid;\nexception when duplicate_object then null; end $$;\ndo $$ begin\n\
+    \  create domain bifurcate.identity_organization_ref as text\n    check (value\
+    \ <> '*' and value ~ '^[a-z0-9][a-z0-9_-]{0,127}$');\nexception when duplicate_object\
+    \ then null; end $$;\n\ncreate table if not exists bifurcate.mcp_servers (\n \
+    \ server_ref text primary key check (server_ref ~ '^mcpsrv_[a-f0-9]{32}$'),\n\
+    \  owner_org_ref bifurcate.identity_organization_ref not null,\n  slug text not\
+    \ null check (slug ~ '^[a-z][a-z0-9-]{0,62}$'),\n  display_name text not null\
+    \ check (length(display_name) between 1 and 200),\n  service_instance_ref text\
+    \ not null check (length(service_instance_ref) between 1 and 512),\n  lifecycle\
+    \ text not null default 'draft'\n    check (lifecycle in ('draft','active','suspended','retired')),\n\
+    \  created_by_subject bifurcate.identity_subject_ref not null,\n  created_at timestamptz\
+    \ not null default now(),\n  updated_at timestamptz not null default now(),\n\
+    \  unique (owner_org_ref, slug),\n  unique (server_ref, owner_org_ref)\n);\n\n\
+    create table if not exists bifurcate.mcp_tools (\n  tool_ref text primary key\
+    \ check (tool_ref ~ '^mcptool_[a-f0-9]{32}$'),\n  server_ref text not null,\n\
+    \  owner_org_ref bifurcate.identity_organization_ref not null,\n  tool_name text\
+    \ not null check (tool_name ~ '^[A-Za-z0-9_.:-]{1,128}$'),\n  ownership text not\
+    \ null default 'organization'\n    check (ownership in ('organization','platform')),\n\
+    \  lifecycle text not null default 'active'\n    check (lifecycle in ('active','suspended','retired')),\n\
+    \  created_by_subject bifurcate.identity_subject_ref not null,\n  created_at timestamptz\
+    \ not null default now(),\n  foreign key (server_ref, owner_org_ref)\n    references\
+    \ bifurcate.mcp_servers(server_ref, owner_org_ref),\n  unique (server_ref, tool_name),\n\
+    \  unique (server_ref, tool_ref),\n  unique (tool_ref, owner_org_ref)\n);\n\n\
+    create table if not exists bifurcate.mcp_server_revisions (\n  revision_ref text\
+    \ primary key check (revision_ref ~ '^mcprev_[a-f0-9]{32}$'),\n  server_ref text\
+    \ not null,\n  owner_org_ref bifurcate.identity_organization_ref not null,\n \
+    \ revision_number bigint not null check (revision_number > 0),\n  definition jsonb\
+    \ not null check (jsonb_typeof(definition) = 'object'),\n  definition_sha256 text\
+    \ not null check (definition_sha256 ~ '^[a-f0-9]{64}$'),\n  state text not null\
+    \ default 'draft' check (state in ('draft','sealed','retired')),\n  created_by_subject\
+    \ bifurcate.identity_subject_ref not null,\n  created_at timestamptz not null\
+    \ default now(),\n  sealed_at timestamptz,\n  foreign key (server_ref, owner_org_ref)\n\
+    \    references bifurcate.mcp_servers(server_ref, owner_org_ref),\n  unique (server_ref,\
+    \ revision_number),\n  unique (server_ref, revision_ref),\n  unique (revision_ref,\
+    \ owner_org_ref),\n  unique (revision_ref, server_ref, owner_org_ref),\n  check\
+    \ ((state <> 'sealed') or sealed_at is not null)\n);\n\ncreate table if not exists\
+    \ bifurcate.mcp_revision_tools (\n  revision_ref text not null,\n  server_ref\
+    \ text not null,\n  owner_org_ref bifurcate.identity_organization_ref not null,\n\
+    \  tool_ref text not null,\n  ordinal integer not null check (ordinal >= 0),\n\
+    \  input_schema jsonb not null check (jsonb_typeof(input_schema) = 'object'),\n\
+    \  tool_definition jsonb not null check (jsonb_typeof(tool_definition) = 'object'),\n\
+    \  schema_sha256 text not null check (schema_sha256 ~ '^[a-f0-9]{64}$'),\n  primary\
+    \ key (revision_ref, tool_ref),\n  foreign key (revision_ref, server_ref, owner_org_ref)\n\
+    \    references bifurcate.mcp_server_revisions(revision_ref, server_ref, owner_org_ref),\n\
+    \  foreign key (server_ref, tool_ref)\n    references bifurcate.mcp_tools(server_ref,\
+    \ tool_ref),\n  foreign key (tool_ref, owner_org_ref)\n    references bifurcate.mcp_tools(tool_ref,\
+    \ owner_org_ref),\n  unique (revision_ref, ordinal),\n  unique (revision_ref,\
+    \ tool_ref, schema_sha256)\n);\n\ncreate table if not exists bifurcate.mcp_active_revisions\
+    \ (\n  server_ref text primary key,\n  owner_org_ref bifurcate.identity_organization_ref\
+    \ not null,\n  revision_ref text not null,\n  activated_by_subject bifurcate.identity_subject_ref\
+    \ not null,\n  activation_sequence bigint not null check (activation_sequence\
+    \ > 0),\n  activated_at timestamptz not null default now(),\n  foreign key (server_ref,\
+    \ owner_org_ref)\n    references bifurcate.mcp_servers(server_ref, owner_org_ref),\n\
+    \  foreign key (revision_ref, server_ref, owner_org_ref)\n    references bifurcate.mcp_server_revisions(revision_ref,\
+    \ server_ref, owner_org_ref),\n  unique (server_ref, activation_sequence)\n);\n\
+    \ncreate table if not exists bifurcate.mcp_catalog_registrations (\n  registration_ref\
+    \ text primary key check (registration_ref ~ '^mcpreg_[a-f0-9]{32}$'),\n  owner_org_ref\
+    \ bifurcate.identity_organization_ref not null,\n  server_ref text not null,\n\
+    \  revision_ref text not null,\n  requested_by_subject bifurcate.identity_subject_ref\
+    \ not null,\n  oauth_client_ref text not null check (oauth_client_ref ~ '^oauthcl_[A-Za-z0-9_-]{16,200}$'),\n\
+    \  operation_key text not null check (length(operation_key) between 1 and 200),\n\
+    \  request_sha256 text not null check (request_sha256 ~ '^[a-f0-9]{64}$'),\n \
+    \ state text not null default 'requested'\n    check (state in ('requested','validated','approved','published','rejected','revoked')),\n\
+    \  reviewed_by_subject bifurcate.identity_subject_ref,\n  review_reason text check\
+    \ (review_reason is null or length(review_reason) between 1 and 500),\n  created_at\
+    \ timestamptz not null default now(),\n  updated_at timestamptz not null default\
+    \ now(),\n  published_at timestamptz,\n  revoked_at timestamptz,\n  foreign key\
+    \ (server_ref, owner_org_ref)\n    references bifurcate.mcp_servers(server_ref,\
+    \ owner_org_ref),\n  foreign key (revision_ref, server_ref, owner_org_ref)\n \
+    \   references bifurcate.mcp_server_revisions(revision_ref, server_ref, owner_org_ref),\n\
+    \  unique (owner_org_ref, operation_key),\n  check ((state not in ('approved','published'))\
+    \ or\n    (reviewed_by_subject is not null and reviewed_by_subject <> requested_by_subject)),\n\
+    \  check ((state <> 'published') or published_at is not null),\n  check ((state\
+    \ <> 'revoked') or revoked_at is not null),\n  check ((state <> 'rejected') or\
+    \ review_reason is not null)\n);\n\ncreate table if not exists bifurcate.mcp_catalog_outbox\
+    \ (\n  event_id bigint generated always as identity primary key,\n  aggregate_kind\
+    \ text not null check (aggregate_kind in ('server','revision','registration')),\n\
+    \  aggregate_ref text not null check (length(aggregate_ref) between 1 and 200),\n\
+    \  event_type text not null check (event_type ~ '^[a-z][a-z0-9_.-]{2,127}$'),\n\
+    \  event_version integer not null default 1 check (event_version = 1),\n  payload\
+    \ jsonb not null check (jsonb_typeof(payload) = 'object'),\n  deduplication_key\
+    \ text not null check (length(deduplication_key) between 1 and 300),\n  created_at\
+    \ timestamptz not null default now(),\n  published_at timestamptz,\n  publish_attempts\
+    \ integer not null default 0 check (publish_attempts >= 0),\n  last_error text,\n\
+    \  unique (deduplication_key)\n);\ncreate index if not exists mcp_catalog_outbox_pending_idx\n\
+    \  on bifurcate.mcp_catalog_outbox(event_id) where published_at is null;\n\ncreate\
+    \ or replace function bifurcate.reject_mcp_revision_payload_mutation() returns\
+    \ trigger\nlanguage plpgsql set search_path = pg_catalog, pg_temp as $$\nbegin\n\
+    \  if old.server_ref is distinct from new.server_ref\n     or old.owner_org_ref\
+    \ is distinct from new.owner_org_ref\n     or old.revision_number is distinct\
+    \ from new.revision_number\n     or old.definition is distinct from new.definition\n\
+    \     or old.definition_sha256 is distinct from new.definition_sha256\n     or\
+    \ old.created_by_subject is distinct from new.created_by_subject then\n    raise\
+    \ exception 'MCP server revision payloads are immutable' using errcode = '55000';\n\
+    \  end if;\n  if old.state <> 'draft' and old.state is distinct from new.state\
+    \ then\n    raise exception 'sealed MCP server revision state is immutable' using\
+    \ errcode = '55000';\n  end if;\n  return new;\nend;\n$$;\ndrop trigger if exists\
+    \ mcp_server_revision_payload_immutable on bifurcate.mcp_server_revisions;\ncreate\
+    \ trigger mcp_server_revision_payload_immutable before update on bifurcate.mcp_server_revisions\n\
+    for each row execute function bifurcate.reject_mcp_revision_payload_mutation();\n\
+    \ncreate or replace function bifurcate.reject_sealed_mcp_revision_tool_mutation()\
+    \ returns trigger\nlanguage plpgsql set search_path = bifurcate, pg_catalog, pg_temp\
+    \ as $$\ndeclare v_revision text;\nbegin\n  v_revision := coalesce(new.revision_ref,\
+    \ old.revision_ref);\n  if exists (select 1 from mcp_server_revisions where revision_ref\
+    \ = v_revision and state <> 'draft') then\n    raise exception 'sealed MCP revision\
+    \ tools are immutable' using errcode = '55000';\n  end if;\n  if tg_op = 'DELETE'\
+    \ then\n    return old;\n  end if;\n  return new;\nend;\n$$;\ndrop trigger if\
+    \ exists sealed_mcp_revision_tools_immutable on bifurcate.mcp_revision_tools;\n\
+    create trigger sealed_mcp_revision_tools_immutable before insert or update or\
+    \ delete\non bifurcate.mcp_revision_tools for each row\nexecute function bifurcate.reject_sealed_mcp_revision_tool_mutation();\n\
+    \ncreate or replace function bifurcate_api.request_mcp_catalog_registration(\n\
+    \  p_registration_ref text, p_owner_org_ref text, p_server_ref text,\n  p_revision_ref\
+    \ text, p_requested_by_subject uuid, p_operation_key text,\n  p_request_sha256\
+    \ text, p_oauth_client_ref text\n) returns table(registration_ref text, state\
+    \ text, idempotent_replay boolean)\nlanguage plpgsql security definer\nset search_path\
+    \ = bifurcate, pg_catalog, pg_temp\nas $$\ndeclare v_existing bifurcate.mcp_catalog_registrations%rowtype;\n\
+    begin\n  insert into mcp_catalog_registrations(registration_ref, owner_org_ref,\
+    \ server_ref,\n    revision_ref, requested_by_subject, operation_key, request_sha256,\
+    \ oauth_client_ref)\n  values(p_registration_ref, p_owner_org_ref, p_server_ref,\
+    \ p_revision_ref,\n    p_requested_by_subject, p_operation_key, p_request_sha256,\
+    \ p_oauth_client_ref)\n  on conflict (owner_org_ref, operation_key) do nothing\n\
+    \  returning * into v_existing;\n  if found then\n    insert into mcp_catalog_outbox(aggregate_kind,\
+    \ aggregate_ref, event_type, payload,\n      deduplication_key)\n    values('registration',\
+    \ p_registration_ref, 'catalog.registration.requested',\n      jsonb_build_object('registrationRef',\
+    \ p_registration_ref,\n        'ownerOrgRef', p_owner_org_ref, 'serverRef', p_server_ref,\n\
+    \        'revisionRef', p_revision_ref, 'requestSha256', p_request_sha256,\n \
+    \       'oauthClientRef', p_oauth_client_ref),\n      'catalog.registration.requested:'\
+    \ || p_registration_ref);\n    return query select p_registration_ref, 'requested'::text,\
+    \ false;\n    return;\n  end if;\n  select * into strict v_existing from mcp_catalog_registrations\n\
+    \   where owner_org_ref = p_owner_org_ref and operation_key = p_operation_key;\n\
+    \  if v_existing.registration_ref is distinct from p_registration_ref\n     or\
+    \ v_existing.server_ref is distinct from p_server_ref\n     or v_existing.revision_ref\
+    \ is distinct from p_revision_ref\n     or v_existing.requested_by_subject is\
+    \ distinct from p_requested_by_subject\n     or v_existing.request_sha256 is distinct\
+    \ from p_request_sha256\n     or v_existing.oauth_client_ref is distinct from\
+    \ p_oauth_client_ref then\n    raise exception 'operation key already exists with\
+    \ different registration content'\n      using errcode = '23505';\n  end if;\n\
+    \  return query select v_existing.registration_ref, v_existing.state, true;\n\
+    end;\n$$;\n\ncreate or replace function bifurcate_api.transition_mcp_catalog_registration(\n\
+    \  p_registration_ref text, p_expected_state text, p_next_state text,\n  p_actor_subject\
+    \ uuid, p_reason text default null\n) returns table(registration_ref text, state\
+    \ text)\nlanguage plpgsql security definer\nset search_path = bifurcate, pg_catalog,\
+    \ pg_temp\nas $$\ndeclare v_row bifurcate.mcp_catalog_registrations%rowtype;\n\
+    declare v_allowed boolean := false;\nbegin\n  select * into strict v_row from\
+    \ mcp_catalog_registrations\n   where mcp_catalog_registrations.registration_ref\
+    \ = p_registration_ref for update;\n  if v_row.state <> p_expected_state then\n\
+    \    raise exception 'registration state changed' using errcode = '40001';\n \
+    \ end if;\n  v_allowed := (v_row.state = 'requested' and p_next_state in ('validated','rejected'))\n\
+    \    or (v_row.state = 'validated' and p_next_state in ('approved','rejected'))\n\
+    \    or (v_row.state = 'approved' and p_next_state in ('published','revoked'))\n\
+    \    or (v_row.state = 'published' and p_next_state = 'revoked');\n  if not v_allowed\
+    \ then\n    raise exception 'invalid registration state transition' using errcode\
+    \ = '22023';\n  end if;\n  if p_next_state in ('approved','published') and p_actor_subject\
+    \ = v_row.requested_by_subject then\n    raise exception 'registration approval\
+    \ requires a different subject' using errcode = '42501';\n  end if;\n  if p_next_state\
+    \ in ('rejected','revoked') and p_reason is null then\n    raise exception 'rejection\
+    \ and revocation require a reason' using errcode = '22023';\n  end if;\n  if p_next_state\
+    \ = 'published' and not exists (\n    select 1 from mcp_server_revisions r where\
+    \ r.revision_ref = v_row.revision_ref\n      and r.server_ref = v_row.server_ref\
+    \ and r.owner_org_ref = v_row.owner_org_ref\n      and r.state = 'sealed') then\n\
+    \    raise exception 'only a sealed revision can be published' using errcode =\
+    \ '55000';\n  end if;\n  update mcp_catalog_registrations set state = p_next_state,\n\
+    \    reviewed_by_subject = case when p_next_state in ('approved','published','rejected')\n\
+    \      then p_actor_subject else reviewed_by_subject end,\n    review_reason =\
+    \ case when p_next_state in ('rejected','revoked') then p_reason else review_reason\
+    \ end,\n    published_at = case when p_next_state = 'published' then now() else\
+    \ published_at end,\n    revoked_at = case when p_next_state = 'revoked' then\
+    \ now() else revoked_at end,\n    updated_at = now()\n  where mcp_catalog_registrations.registration_ref\
+    \ = p_registration_ref;\n  insert into mcp_catalog_outbox(aggregate_kind, aggregate_ref,\
+    \ event_type, payload,\n    deduplication_key)\n  values('registration', p_registration_ref,\
+    \ 'catalog.registration.' || p_next_state,\n    jsonb_build_object('registrationRef',\
+    \ p_registration_ref, 'ownerOrgRef', v_row.owner_org_ref,\n      'serverRef',\
+    \ v_row.server_ref, 'revisionRef', v_row.revision_ref,\n      'state', p_next_state),\n\
+    \    'catalog.registration.' || p_next_state || ':' || p_registration_ref);\n\
+    \  return query select p_registration_ref, p_next_state;\nend;\n$$;\n\ncreate\
+    \ or replace function bifurcate_api.activate_mcp_catalog_revision(\n  p_registration_ref\
+    \ text, p_actor_subject uuid, p_expected_active_revision_ref text default null\n\
+    ) returns table(server_ref text, revision_ref text, activation_sequence bigint)\n\
+    language plpgsql security definer\nset search_path = bifurcate, pg_catalog, pg_temp\n\
+    as $$\ndeclare v_row bifurcate.mcp_catalog_registrations%rowtype;\ndeclare v_sequence\
+    \ bigint;\ndeclare v_active_revision_ref text;\nbegin\n  select * into strict\
+    \ v_row from mcp_catalog_registrations\n   where mcp_catalog_registrations.registration_ref\
+    \ = p_registration_ref for update;\n  if v_row.state <> 'published' then\n   \
+    \ raise exception 'only a published registration can become active' using errcode\
+    \ = '55000';\n  end if;\n  perform 1 from mcp_servers s where s.server_ref = v_row.server_ref\
+    \ for update;\n  select a.revision_ref into v_active_revision_ref from mcp_active_revisions\
+    \ a\n    where a.server_ref = v_row.server_ref;\n  if v_active_revision_ref is\
+    \ distinct from p_expected_active_revision_ref then\n    raise exception 'active\
+    \ MCP revision changed' using errcode = '40001';\n  end if;\n  select coalesce(max(a.activation_sequence),\
+    \ 0) + 1 into v_sequence\n    from mcp_active_revisions a where a.server_ref =\
+    \ v_row.server_ref;\n  insert into mcp_active_revisions(server_ref, owner_org_ref,\
+    \ revision_ref,\n    activated_by_subject, activation_sequence)\n  values(v_row.server_ref,\
+    \ v_row.owner_org_ref, v_row.revision_ref,\n    p_actor_subject, v_sequence)\n\
+    \  on conflict on constraint mcp_active_revisions_pkey do update set\n    revision_ref\
+    \ = excluded.revision_ref,\n    activated_by_subject = excluded.activated_by_subject,\n\
+    \    activation_sequence = excluded.activation_sequence,\n    activated_at = now();\n\
+    \  insert into mcp_catalog_outbox(aggregate_kind, aggregate_ref, event_type, payload,\n\
+    \    deduplication_key)\n  values('revision', v_row.revision_ref, 'catalog.revision.activated',\n\
+    \    jsonb_build_object('serverRef', v_row.server_ref, 'ownerOrgRef', v_row.owner_org_ref,\n\
+    \      'revisionRef', v_row.revision_ref, 'activationSequence', v_sequence),\n\
+    \    'catalog.revision.activated:' || v_row.server_ref || ':' || v_sequence);\n\
+    \  return query select v_row.server_ref, v_row.revision_ref, v_sequence;\nend;\n\
+    $$;\n\ncreate or replace view bifurcate.active_mcp_catalog as\nselect s.server_ref,\
+    \ s.owner_org_ref, s.slug, s.display_name, s.service_instance_ref,\n       a.revision_ref,\
+    \ a.activation_sequence, r.definition_sha256,\n       t.tool_ref, t.tool_name,\
+    \ rt.schema_sha256, rt.input_schema, rt.tool_definition,\n       r.definition\
+    \ as revision_definition\nfrom bifurcate.mcp_active_revisions a\njoin bifurcate.mcp_servers\
+    \ s using (server_ref, owner_org_ref)\njoin bifurcate.mcp_server_revisions r using\
+    \ (revision_ref, server_ref, owner_org_ref)\njoin bifurcate.mcp_revision_tools\
+    \ rt using (revision_ref, server_ref, owner_org_ref)\njoin bifurcate.mcp_tools\
+    \ t using (tool_ref, server_ref, owner_org_ref)\nwhere s.lifecycle = 'active'\
+    \ and r.state = 'sealed' and t.lifecycle = 'active';\n\ncreate or replace function\
+    \ bifurcate_api.claim_mcp_catalog_projection_events(p_limit integer default 100)\n\
+    returns table(event_id bigint, event_type text, payload jsonb)\nlanguage sql security\
+    \ definer\nset search_path = bifurcate, pg_catalog, pg_temp\nas $$\n  with claimed\
+    \ as (\n    select o.event_id from mcp_catalog_outbox o\n    where o.published_at\
+    \ is null\n    order by o.event_id\n    limit greatest(1, least(p_limit, 256))\n\
+    \    for update skip locked\n  ), updated as (\n    update mcp_catalog_outbox\
+    \ o set publish_attempts = publish_attempts + 1\n    from claimed c where o.event_id\
+    \ = c.event_id\n    returning o.event_id, o.event_type, o.payload\n  ) select\
+    \ * from updated order by event_id;\n$$;\n\ncreate or replace function bifurcate_api.ack_mcp_catalog_projection_event(p_event_id\
+    \ bigint)\nreturns boolean language sql security definer\nset search_path = bifurcate,\
+    \ pg_catalog, pg_temp\nas $$\n  with updated as (\n    update mcp_catalog_outbox\
+    \ set published_at = coalesce(published_at, now()), last_error = null\n    where\
+    \ event_id = p_event_id returning 1\n  ) select exists(select 1 from updated);\n\
+    $$;\n\nrevoke all on schema bifurcate from public;\nrevoke all on all tables in\
+    \ schema bifurcate from public;\nrevoke all on all functions in schema bifurcate\
+    \ from public;\nrevoke all on schema bifurcate_api from public;\nrevoke all on\
+    \ all functions in schema bifurcate_api from public;\ngrant usage on schema bifurcate\
+    \ to billing_commerce_runtime;\ngrant select on bifurcate.active_mcp_catalog to\
+    \ billing_commerce_runtime;\ngrant usage on schema bifurcate_api to billing_commerce_runtime;\n\
+    grant execute on function bifurcate_api.request_mcp_catalog_registration(text,text,text,text,uuid,text,text,text)\n\
+    \  to billing_commerce_runtime;\ngrant execute on function bifurcate_api.transition_mcp_catalog_registration(text,text,text,uuid,text)\n\
+    \  to billing_commerce_runtime;\ngrant execute on function bifurcate_api.activate_mcp_catalog_revision(text,uuid,text)\n\
+    \  to billing_commerce_runtime;\ngrant execute on function bifurcate_api.claim_mcp_catalog_projection_events(integer)\n\
+    \  to billing_commerce_runtime;\ngrant execute on function bifurcate_api.ack_mcp_catalog_projection_event(bigint)\n\
+    \  to billing_commerce_runtime;\ndo $$\nbegin\n  if exists (select 1 from pg_roles\
+    \ where rolname = 'billing_supabase_pgrst_rw') then\n    grant billing_commerce_runtime\
+    \ to billing_supabase_pgrst_rw;\n  end if;\n  if exists (select 1 from pg_roles\
+    \ where rolname = 'billing_supabase_pgrst_ro') then\n    grant billing_commerce_runtime\
+    \ to billing_supabase_pgrst_ro;\n  end if;\nend\n$$;\nnotify pgrst, 'reload schema';\n\
+    \ncommit;\n"
+kind: ConfigMap
+metadata:
+  name: supabase-billing-dynamic-mcp-catalog-v2
+  namespace: supabase-pg-re8ch
 ---
 apiVersion: v1
 data:

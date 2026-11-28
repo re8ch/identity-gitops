@@ -21,13 +21,15 @@ disabled.
 The Bifurcate tool-publication and organization-cluster-binding migrations are
 different: they are new, idempotent schema migrations against `re8ch_billing`,
 not a replay of the historical studio bootstrap. This repository is the
-existing authority for `supabase-pg-re8ch`, so its native Flux root creates the
-two one-shot Jobs and their exact supporting objects. The static release
-compiler intentionally classifies Jobs as `one-shot-job-platform-owned`; it
-therefore adopts the ConfigMaps, ServiceAccount, and CiliumNetworkPolicy into
-the protected `identity-access-domain-supabase-pg-re8ch` contract while leaving
-Job execution to the existing native controller. Do not copy these migrations
-into commerce-billing or another static domain to work around that boundary.
+existing authority for `supabase-pg-re8ch`, so it retains the versioned one-shot
+Jobs and their exact supporting objects. Historical Jobs remain
+`one-shot-job-platform-owned`. The dynamic MCP Catalog v2 migration is a bounded
+exception: its ConfigMap and Job are allowlisted in the protected
+`identity-access-domain-supabase-pg-re8ch` contract. The platform Cloud SSA tool
+creates these missing objects from the merged declaration; static-release then
+adopts them with `requireExisting=true` and exact get/patch/update RBAC. This
+avoids namespace-wide create while retaining immutable release and readback
+evidence. Do not copy migrations into commerce-billing or another static domain.
 
 `authority-transfers.json` binds previous digest, repository and source commit.
 The new repository signs a new authority envelope without rebuilding product
