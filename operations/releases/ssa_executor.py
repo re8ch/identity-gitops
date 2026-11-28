@@ -290,10 +290,19 @@ class Executor:
         return annotated
 
     def with_existing_versions(self, objects: list[dict]) -> list[dict]:
-        try:
-            return bind_existing(objects, self.command)
-        except ExistingObjectError as error:
-            raise Rejected(str(error)) from None
+        for attempt in range(3):
+            try:
+                return bind_existing(objects, self.command)
+            except ExistingObjectError as error:
+                raise Rejected(str(error)) from None
+            except subprocess.TimeoutExpired:
+                if attempt == 2:
+                    raise
+            except Rejected as error:
+                if attempt == 2 or not transient_failure(None, str(error)):
+                    raise
+            self.sleeper(2 ** attempt)
+        raise AssertionError("bounded existing-object read retry exhausted")
 
     def apply(self, objects: list[dict], field_manager: str, dry_run: bool,
               force_objects: set[str] | None = None, require_existing: bool = False) -> None:
@@ -305,8 +314,13 @@ class Executor:
                 argv.append("--dry-run=server")
             argv += ["-f", "-"]
             for attempt in range(3):
-                current = self.with_existing_versions([item])[0] if require_existing else item
                 try:
+                    # Existing-object adoption is a read-before-write guard. A
+                    # transient API transport failure during that read is just
+                    # as retryable as one during the following SSA request.
+                    # Keep both inside the same bounded retry envelope; UID and
+                    # resourceVersion are refreshed on every attempt.
+                    current = self.with_existing_versions([item])[0] if require_existing else item
                     self.command(argv, json.dumps(current), timeout=120)
                     break
                 except subprocess.TimeoutExpired:
