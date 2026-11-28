@@ -1,0 +1,125 @@
+[
+  {
+    "id": "R01",
+    "title": "核对普通授权与敏感操作 MFA 策略",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Source reviewed",
+    "acceptance": "分别执行应用授权与敏感操作；核对服务端策略，统一 README 和错误提示。",
+    "body": "源码发现 README 对授权 MFA 要求描述不一致。局部 UI 无门槛不能证明服务端无校验。保留两条路径的测试证据和产品归属。",
+    "use_case_ids": [
+      "UC-05",
+      "UC-06"
+    ]
+  },
+  {
+    "id": "R02",
+    "title": "验证组织目录与当前资源组织的可理解性及隔离",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Source reviewed",
+    "acceptance": "用户正确识别操作组织；跨组织读写拒绝；切换后的旧状态不能误操作。",
+    "body": "目录 scope 与 active organization 是两套上下文。覆盖 Re8ch 与 Re8ch Admin 身份边界，使用专用测试组织，不移动生产成员。",
+    "use_case_ids": [
+      "UC-10",
+      "UC-11",
+      "UC-13"
+    ]
+  },
+  {
+    "id": "R03",
+    "title": "首次登录、身份绑定与重复账号恢复",
+    "priority": "P0",
+    "surface": "Frontend",
+    "evidence": "Hypothesis",
+    "acceptance": "登录可回到原任务；明确新建/绑定；过期票据与冲突有恢复路径。",
+    "body": "先逐项验证发布的登录方式，再用首次使用人格和真实用户任务检验选择与理解。",
+    "use_case_ids": [
+      "UC-01",
+      "UC-02",
+      "UC-04"
+    ]
+  },
+  {
+    "id": "R04",
+    "title": "授权范围与失败提示的用户理解",
+    "priority": "P0",
+    "surface": "Frontend",
+    "evidence": "Source reviewed",
+    "acceptance": "用户能解释所授权限；拒绝与过期、网络错误均有准确下一步提示。",
+    "body": "检查原始 scope 展示及通用登录失败标题在授权流程的语义。先复现，后决定文案和交互修改。",
+    "use_case_ids": [
+      "UC-05",
+      "UC-22"
+    ]
+  },
+  {
+    "id": "R05",
+    "title": "设备、会话与 MFA 恢复闭环",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Hypothesis",
+    "acceptance": "明确当前设备、其他会话和退出范围；验证失败不静默成功；恢复方案有实际证据。",
+    "body": "以共享设备及失去验证器任务为输入，避免仅凭入口存在声称安全流程完整。",
+    "use_case_ids": [
+      "UC-06",
+      "UC-08"
+    ]
+  },
+  {
+    "id": "R06",
+    "title": "隐私申请前台与后台履约协作",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Source reviewed",
+    "acceptance": "用户区分申请与实际删除；取消竞争/版本冲突可恢复；管理员完成需履约证据。",
+    "body": "只用测试夹具；不执行生产删除。身份快照边界、状态语义、操作者权限和用户可见说明分别验收。",
+    "use_case_ids": [
+      "UC-15",
+      "UC-16",
+      "UC-17"
+    ]
+  },
+  {
+    "id": "R07",
+    "title": "区分资源用量、实际消费和历史 Credits",
+    "priority": "P0",
+    "surface": "Frontend",
+    "evidence": "Source reviewed",
+    "acceptance": "用户能解释各数据含义；无数据、延迟、失败各自可识别。",
+    "body": "多类账单概念并列是源码事实，用户混淆仍待验证；不通过本研究发起真实购买。",
+    "use_case_ids": [
+      "UC-19"
+    ]
+  },
+  {
+    "id": "R08",
+    "title": "绑定批准的 LiteLLM 调用入口并运行五个人格试验",
+    "priority": "P0",
+    "surface": "Backend",
+    "evidence": "Hypothesis",
+    "acceptance": "先单场景再五场景；记录模型、输入hash、来源SHA与脱敏发现；错误和阻塞不得计成功。",
+    "body": "当前缺少批准的推理绑定与模型别名。已有最小脚本和dry-run；不得提取本地平台密钥或把健康检查当推理授权。",
+    "use_case_ids": []
+  },
+  {
+    "id": "R09",
+    "title": "启用隔离浏览器验证并采集实际操作证据",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Hypothesis",
+    "acceptance": "记录实际动作、可见状态和后端断言；每个P0标记通过/失败/阻塞；静态走查不能替代。",
+    "body": "当前Work环境禁用浏览器操作。准备测试身份、角色和数据，优先登录/授权/切换组织只读任务；写操作需隔离夹具。",
+    "use_case_ids": []
+  },
+  {
+    "id": "R10",
+    "title": "真实用户任务研究与 v1 稳定体验评审",
+    "priority": "P0",
+    "surface": "Cross-cutting",
+    "evidence": "Hypothesis",
+    "acceptance": "按v1基线完成每项关键任务至少5次真实用户观察及两轮P0回归；未满足门槛不宣布稳定。",
+    "body": "招募8–12位覆盖行为的用户，取得同意并脱敏；模拟意见只生成问题，不替代真实用户证据。",
+    "use_case_ids": []
+  }
+]

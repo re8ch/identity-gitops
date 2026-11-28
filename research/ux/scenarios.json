@@ -1,0 +1,164 @@
+{
+  "source": {
+    "repository": "https://github.com/re8ch/user-hub",
+    "revision": "2402df0e0b1a34a0571012d927d75ce6dd27a6d5",
+    "path": "public/index.html",
+    "kind": "reviewed-static-control-inventory",
+    "runtime_visibility": "unknown",
+    "note": "源码中的隐藏控件不代表当前用户可见。这里不含账户、会话、令牌或真实用户数据。"
+  },
+  "controls": [
+    {
+      "id": "signed-out",
+      "text": "先登录，开启你的个人中心。选择一种方式继续"
+    },
+    {
+      "id": "sign-in",
+      "text": "使用 GitHub 登录"
+    },
+    {
+      "id": "email-login-form",
+      "text": "邮箱验证码登录；发送验证码"
+    },
+    {
+      "id": "login-session-duration",
+      "text": "保持登录：仅此浏览器会话、1 天、7 天"
+    },
+    {
+      "id": "platform-create-panel",
+      "text": "平台身份尚未关联。登录现有账号后绑定，或创建新的 RE8CH 账号"
+    },
+    {
+      "id": "platform-link-confirm",
+      "text": "确认绑定当前账号"
+    },
+    {
+      "id": "consent-approve",
+      "text": "允许访问"
+    },
+    {
+      "id": "consent-deny",
+      "text": "拒绝"
+    },
+    {
+      "id": "consent-scopes",
+      "text": "请求范围（动态填充）"
+    },
+    {
+      "id": "organization-ref",
+      "text": "组织标识"
+    },
+    {
+      "id": "member-remove",
+      "text": "移出组织"
+    },
+    {
+      "id": "permission-add",
+      "text": "添加权限范围"
+    },
+    {
+      "id": "sign-out-others",
+      "text": "退出其他设备"
+    },
+    {
+      "id": "mfa-enroll",
+      "text": "绑定身份验证器"
+    },
+    {
+      "id": "mfa-remove",
+      "text": "解除绑定"
+    },
+    {
+      "id": "request-delete",
+      "text": "申请注销账号"
+    },
+    {
+      "id": "privacy",
+      "text": "注销申请不会立即删除账号；只有待处理申请可以取消"
+    },
+    {
+      "id": "download-identity-export",
+      "text": "下载身份资料 JSON"
+    },
+    {
+      "id": "admin-requests",
+      "text": "处理说明对申请人可见；完成前确认各服务落实并填写凭据编号；状态更新不会执行数据删除"
+    },
+    {
+      "id": "commerce-title",
+      "text": "购买 RE8CH Credits"
+    },
+    {
+      "id": "spend-title",
+      "text": "Credits 实际消费"
+    },
+    {
+      "id": "billing-title",
+      "text": "资源用量"
+    },
+    {
+      "id": "credits-title",
+      "text": "历史服务 Credits"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "SIM-01",
+      "persona": "首次使用、没有 GitHub 的非技术用户（假设）",
+      "goal": "用邮箱进入个人中心，避免误建重复账号",
+      "failure_probe": "验证码过期；平台身份需要明确关联选择",
+      "persona_id": "P-N",
+      "use_case_ids": [
+        "UC-01",
+        "UC-02",
+        "UC-04"
+      ]
+    },
+    {
+      "id": "SIM-02",
+      "persona": "同时属于多个组织的团队管理员（假设）",
+      "goal": "确认当前组织并撤销离职成员权限",
+      "failure_probe": "组织切换、旧页面、越权、最后一个管理员；源码没有足够信息时直接报告未知",
+      "persona_id": "P-O",
+      "use_case_ids": [
+        "UC-10",
+        "UC-11",
+        "UC-13"
+      ]
+    },
+    {
+      "id": "SIM-03",
+      "persona": "在共享设备上登录、担心安全的成员（假设）",
+      "goal": "理解授权范围、拒绝授权并结束其他设备会话",
+      "failure_probe": "会话过期、MFA失败、误退出当前设备",
+      "persona_id": "P-R",
+      "use_case_ids": [
+        "UC-05",
+        "UC-06",
+        "UC-08"
+      ]
+    },
+    {
+      "id": "SIM-04",
+      "persona": "希望离开服务的用户与处理申请的运营人员（假设）",
+      "goal": "理解导出与注销申请的边界及进度",
+      "failure_probe": "把提交申请误认为已删除；不能取消处理中申请",
+      "persona_id": "P-R/P-S",
+      "use_case_ids": [
+        "UC-15",
+        "UC-16",
+        "UC-17"
+      ]
+    },
+    {
+      "id": "SIM-05",
+      "persona": "只想看清服务实际消费的团队成员（假设）",
+      "goal": "区分资源用量、实际 Credits 消费、历史 Credits 与购买",
+      "failure_probe": "空记录、账单延迟、接口失败；不能把空态当零消费",
+      "persona_id": "P-D",
+      "use_case_ids": [
+        "UC-19"
+      ]
+    }
+  ]
+}
